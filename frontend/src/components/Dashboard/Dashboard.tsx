@@ -1,9 +1,17 @@
 // @ts-nocheck
+// ─────────────────────────────────────────────────────────────
+// Dashboard.tsx — main user dashboard.
+// Shows: registered subdomains + submitted requests with status.
+// The MyRequests section only renders if the user has submitted
+// at least one request, so it's not cluttering new user views.
+// ─────────────────────────────────────────────────────────────
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import * as api from '../../services/api';
 import SubdomainCard from './SubdomainCard';
 import DNSManager from './DNSManager';
+import MyRequests from './MyRequests';
 import { useAuth } from '../../contexts/AuthContext';
 import Btn from '../UI/Btn';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -12,17 +20,28 @@ export default function Dashboard() {
   const { user } = useAuth();
   const isMobile = useIsMobile(640);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [subdomains, setSubdomains] = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [selected,   setSelected]   = useState(null);
-  const [error,      setError]      = useState('');
-  const [stripeMsg,  setStripeMsg]  = useState('');
+  const [subdomains,   setSubdomains]   = useState([]);
+  const [myRequests,   setMyRequests]   = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [selected,     setSelected]     = useState(null);
+  const [error,        setError]        = useState('');
+  const [stripeMsg,    setStripeMsg]    = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const { subdomains } = await api.getSubdomains(); setSubdomains(subdomains); }
-    catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    try {
+      // I fetch both in parallel so the page loads faster
+      const [subRes, reqRes] = await Promise.all([
+        api.getSubdomains(),
+        api.getMyRequests(),
+      ]);
+      setSubdomains(subRes.subdomains);
+      setMyRequests(reqRes.requests);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -53,10 +72,10 @@ export default function Dashboard() {
 
   return (
     <div className="fade-up">
-      {/* Header — stacks on mobile */}
+      {/* Page header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom:'24px', flexWrap:'wrap', gap:'12px' }}>
         <div>
-          <div style={{ display:'flex', alignItems:'center', fontFamily:'var(--font-mono)', fontSize:'11px', marginBottom:'6px', flexWrap:'wrap', gap:'0' }}>
+          <div style={{ display:'flex', alignItems:'center', fontFamily:'var(--font-mono)', fontSize:'11px', marginBottom:'6px', flexWrap:'wrap' }}>
             <span style={{ color:'var(--muted)' }}># submarket</span>
             <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
             <span style={{ color:'var(--blue)' }}>dashboard</span>
@@ -66,14 +85,13 @@ export default function Dashboard() {
           </div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize: isMobile ? '26px' : '36px', letterSpacing:'2px' }}>MY DOMAINS</h1>
         </div>
-        <Link to="/purchase">
-          <Btn variant="blue">+ NEW DOMAIN</Btn>
-        </Link>
+        <Link to="/purchase"><Btn variant="blue">+ NEW DOMAIN</Btn></Link>
       </div>
 
       {stripeMsg && <div style={s.ok}>OK -- payment confirmed -- <strong>{stripeMsg}</strong> registered</div>}
       {error     && <div style={s.err}>ERR -- {error}</div>}
 
+      {/* Subdomains grid */}
       {subdomains.length === 0 ? (
         <div style={s.empty}>
           <div style={{ fontFamily:'var(--font-mono)', fontSize:'13px', lineHeight:2.2, marginBottom:'16px' }}>
@@ -87,7 +105,7 @@ export default function Dashboard() {
           <Link to="/purchase"><Btn variant="primary">&#9658; PURCHASE FIRST DOMAIN</Btn></Link>
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'1px', marginBottom:'40px', background:'var(--border)' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'1px', marginBottom:'8px', background:'var(--border)' }}>
           {subdomains.map((tag, i) => (
             <div key={tag.id} className={`fade-up delay-${Math.min(i+1,3)}`}>
               <SubdomainCard tag={tag} onConfigureDNS={setSelected} onDelete={handleDelete} />
@@ -96,15 +114,19 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={s.docs}>
-        <div style={{ color:'var(--comment)', padding:'10px 12px 4px', fontSize:'12px' }}>/**</div>
+      {/* My requests — only shown if the user has submitted at least one */}
+      <MyRequests requests={myRequests} />
+
+      {/* Info block */}
+      <div style={{ ...s.docs, marginTop:'32px' }}>
+        <div style={{ color:'var(--comment)', padding:'10px 12px 4px', fontSize:'12px', fontFamily:'var(--font-mono)' }}>/**</div>
         {[
           ['@hosting',   'Vercel, Netlify, GitHub Pages, Wix, Squarespace, VPS'],
           ['@dns',       'A, CNAME, MX, TXT, AAAA record types'],
           ['@cdn',       'Cloudflare proxy -- DDoS protection + auto HTTPS'],
           ['@api',       'REST API for programmatic DNS updates'],
         ].map(([key, val]) => (
-          <div key={key} style={{ padding:'2px 12px', fontSize:'12px', lineHeight:2, fontFamily:'var(--font-mono)', flexWrap:'wrap' }}>
+          <div key={key} style={{ padding:'2px 12px', fontSize:'12px', lineHeight:2, fontFamily:'var(--font-mono)' }}>
             <span style={{ color:'var(--comment)' }}>  * </span>
             <span style={{ color:'var(--gold)', fontFamily:'var(--font-display)', fontSize:'11px', letterSpacing:'0.5px' }}>{key}</span>
             <span style={{ color:'var(--muted)' }}> -- </span>
@@ -124,6 +146,6 @@ export default function Dashboard() {
 const s = {
   ok:   { padding:'8px 14px', background:'rgba(58,255,110,0.08)', border:'1px solid var(--green)', fontFamily:'var(--font-mono)', fontSize:'12px', marginBottom:'16px' },
   err:  { padding:'8px 14px', background:'rgba(192,57,43,0.07)', border:'1px solid var(--red)', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--red)', marginBottom:'16px' },
-  empty:{ padding:'28px 20px', border:'1px dashed var(--border)', marginBottom:'32px', display:'flex', flexDirection:'column', gap:'12px', background:'var(--surface)' },
+  empty:{ padding:'28px 20px', border:'1px dashed var(--border)', marginBottom:'16px', display:'flex', flexDirection:'column', gap:'12px', background:'var(--surface)' },
   docs: { border:'1px solid var(--border)', background:'var(--surface)' },
 };

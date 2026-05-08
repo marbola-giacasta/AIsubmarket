@@ -1,7 +1,12 @@
 // @ts-nocheck
-// TypeScript migration in progress — full types will be added gradually.
-// @ts-nocheck suppresses type errors on this file so the build passes
-// while the rest of the codebase is already fully typed.
+// ─────────────────────────────────────────────────────────────
+// api/subdomains/routes.ts
+// Added in this version:
+//   GET /api/subdomains/my-requests — returns all subdomain
+//   requests submitted by the current user, including their
+//   status and any admin note attached on approval/rejection.
+// ─────────────────────────────────────────────────────────────
+
 const express   = require('express');
 const supabase  = require('../../lib/database').default;
 const { requireAuth } = require('../../middleware/auth');
@@ -26,10 +31,12 @@ async function isAvailable(fqdn) {
   return !data;
 }
 
+// ── GET /api/subdomains/domains ───────────────────────────────
 router.get('/domains', (_req, res) => {
   res.json({ domains: AVAILABLE_DOMAINS });
 });
 
+// ── GET /api/subdomains/check ─────────────────────────────────
 router.get('/check', async (req, res, next) => {
   try {
     const { subdomain, domain } = req.query;
@@ -40,14 +47,34 @@ router.get('/check', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /api/subdomains ───────────────────────────────────────
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const { data, error } = await supabase.from('tags').select('*').eq('owner_id', req.user.id).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('tags').select('*').eq('owner_id', req.user.id)
+      .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ subdomains: data });
   } catch (err) { next(err); }
 });
 
+// ── GET /api/subdomains/my-requests ──────────────────────────
+// Returns all subdomain requests the current user has submitted.
+// Includes status (pending/approved/rejected) and any admin_note
+// the admin attached when processing the request.
+router.get('/my-requests', requireAuth, async (req, res, next) => {
+  try {
+    const { data, error } = await supabase
+      .from('subdomain_requests')
+      .select('id, fqdn, subdomain, domain, use_case, status, admin_note, created_at')
+      .eq('requester_id', req.user.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ requests: data });
+  } catch (err) { next(err); }
+});
+
+// ── POST /api/subdomains/purchase ─────────────────────────────
 router.post('/purchase', requireAuth, async (req, res, next) => {
   try {
     const { subdomain, domain } = req.body;
@@ -56,12 +83,14 @@ router.post('/purchase', requireAuth, async (req, res, next) => {
     if (!validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain format' });
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
-    const { data: tag, error } = await supabase.from('tags').insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
+    const { data: tag, error } = await supabase.from('tags')
+      .insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
     if (error) throw error;
     res.status(201).json({ subdomain: tag });
   } catch (err) { next(err); }
 });
 
+// ── POST /api/subdomains/request ──────────────────────────────
 router.post('/request', requireAuth, async (req, res, next) => {
   try {
     const { subdomain, domain, name, useCase, message } = req.body;
@@ -70,18 +99,17 @@ router.post('/request', requireAuth, async (req, res, next) => {
     if (!validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain format' });
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
-
     const { data: request, error: dbErr } = await supabase
       .from('subdomain_requests')
       .insert({ subdomain, domain, fqdn, requester_id: req.user.id, requester_email: req.user.email, name, use_case: useCase, message: message || null, status: 'pending' })
       .select('*').single();
     if (dbErr) throw dbErr;
-
     await sendSubdomainRequest({ name, email: req.user.email, subdomain, domain, fqdn, useCase, message });
     res.status(201).json({ request, message: 'Request submitted! We will review and contact you shortly.' });
   } catch (err) { next(err); }
 });
 
+// ── POST /api/subdomains/stripe-session ──────────────────────
 router.post('/stripe-session', requireAuth, async (req, res, next) => {
   try {
     if (!stripe) return res.status(503).json({ error: 'Stripe is not configured on this server' });
@@ -91,7 +119,6 @@ router.post('/stripe-session', requireAuth, async (req, res, next) => {
     if (!validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain format' });
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
-
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -106,6 +133,7 @@ router.post('/stripe-session', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── POST /api/subdomains/stripe-success ──────────────────────
 router.post('/stripe-success', requireAuth, async (req, res, next) => {
   try {
     if (!stripe) return res.status(503).json({ error: 'Stripe not configured' });
@@ -116,12 +144,14 @@ router.post('/stripe-success', requireAuth, async (req, res, next) => {
     const { subdomain, domain, fqdn, user_id } = session.metadata;
     if (user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
-    const { data: tag, error } = await supabase.from('tags').insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
+    const { data: tag, error } = await supabase.from('tags')
+      .insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
     if (error) throw error;
     res.status(201).json({ subdomain: tag });
   } catch (err) { next(err); }
 });
 
+// ── PUT /api/subdomains/:id/dns ───────────────────────────────
 router.put('/:id/dns', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -136,12 +166,15 @@ router.put('/:id/dns', requireAuth, async (req, res, next) => {
     } else {
       recordId = await createDnsRecord({ domain: tag.domain, subdomain: tag.subdomain, type: dns_type, value: dns_value, proxied: dns_proxied, ttl: dns_ttl });
     }
-    const { data: updated, error: updateErr } = await supabase.from('tags').update({ dns_record_id: recordId, dns_type, dns_value, dns_proxied: dns_proxied ? 1 : 0, dns_ttl, dns_updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
+    const { data: updated, error: updateErr } = await supabase.from('tags')
+      .update({ dns_record_id: recordId, dns_type, dns_value, dns_proxied: dns_proxied ? 1 : 0, dns_ttl, dns_updated_at: new Date().toISOString() })
+      .eq('id', id).select('*').single();
     if (updateErr) throw updateErr;
     res.json({ subdomain: updated });
   } catch (err) { next(err); }
 });
 
+// ── DELETE /api/subdomains/:id/dns ────────────────────────────
 router.delete('/:id/dns', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -154,6 +187,7 @@ router.delete('/:id/dns', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── DELETE /api/subdomains/:id ────────────────────────────────
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
