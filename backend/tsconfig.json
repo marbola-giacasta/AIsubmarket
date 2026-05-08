@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    // I'm running Node 18 on Vercel, so ES2020 is safe to target
+    "target":            "ES2020",
+    "module":            "Node16",
+    "moduleResolution":  "node16",
+    "ignoreDeprecations": "5.0",
+    // I need this to augment Express's Request type in types/index.ts
+    "typeRoots": ["./node_modules/@types", "./types"],
+    // Strict mode — forces me to handle nulls and undefined properly
+    "strict":            true,
+    // I want compiled JS files to land in /dist
+    "outDir":            "./dist",
+    "rootDir":           "./",
+    "resolveJsonModule": true,
+    "esModuleInterop":   true,
+    "skipLibCheck":      true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    // I'm targeting modern browsers, so ES2020 is fine
+    "target": "ES2020",
+    // This tells TypeScript how to handle module imports (Vite uses bundler mode)
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // I want JSX compiled to React.createElement calls
+    "jsx": "react-jsx",
+    // Strict mode catches a lot of bugs I'd miss — null checks, implicit any, etc.
+    "strict": true,
+    // I can use the latest JS features in my code
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // Vite doesn't use tsc to emit files, just to type-check
+    "noEmit": true,
+    // I can import JSON files if I need to
+    "resolveJsonModule": true,
+    // Makes sure each file is treated as its own module (needed for Vite)
+    "isolatedModules": true,
+    // Skip type-checking inside node_modules (much faster builds)
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

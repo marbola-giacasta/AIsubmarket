@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    // vite.config.ts runs in Node, not the browser, so I need different settings here
+    "composite": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
