@@ -1,6 +1,7 @@
 // @ts-nocheck
-// Added in this version: accept-price, decline-price,
-// cancel-subscription endpoints for the user side.
+// Added: POST /api/subdomains/requests/:id/dismiss
+// Marks a rejected request as dismissed so it no longer
+// appears in the user's my-requests list.
 
 const express   = require('express');
 const supabase  = require('../../lib/database').default;
@@ -39,16 +40,35 @@ router.get('/', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Returns all requests submitted by this user + status + admin fields
+// Returns requests for this user — excludes dismissed ones
 router.get('/my-requests', requireAuth, async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from('subdomain_requests')
       .select('id, fqdn, subdomain, domain, use_case, status, admin_note, admin_comment, price_usd, price_chf, price_eur, price_status, created_at')
       .eq('requester_id', req.user.id)
+      .eq('dismissed', false)   // never return dismissed requests
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ requests: data });
+  } catch (err) { next(err); }
+});
+
+// User dismisses a rejected request — hides it from their list permanently
+router.post('/requests/:id/dismiss', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    // Verify ownership and that it is actually rejected before dismissing
+    const { data: request } = await supabase
+      .from('subdomain_requests')
+      .select('id, status')
+      .eq('id', id)
+      .eq('requester_id', req.user.id)
+      .single();
+    if (!request)                    return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'rejected') return res.status(400).json({ error: 'Only rejected requests can be dismissed' });
+    await supabase.from('subdomain_requests').update({ dismissed: true }).eq('id', id);
+    res.json({ message: 'Request dismissed' });
   } catch (err) { next(err); }
 });
 
@@ -72,11 +92,11 @@ router.post('/requests/:id/decline-price', requireAuth, async (req, res, next) =
     if (!request) return res.status(404).json({ error: 'Request not found' });
     if (request.price_status !== 'proposed') return res.status(400).json({ error: 'No active price proposal' });
     await supabase.from('subdomain_requests').update({ price_status: 'declined' }).eq('id', id);
-    res.json({ message: 'Price declined. The admin will be notified.' });
+    res.json({ message: 'Price declined.' });
   } catch (err) { next(err); }
 });
 
-// User cancels monthly renewal of their subdomain
+// User cancels subscription renewal
 router.post('/:id/cancel-subscription', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -84,7 +104,7 @@ router.post('/:id/cancel-subscription', requireAuth, async (req, res, next) => {
     if (!tag) return res.status(404).json({ error: 'Subdomain not found' });
     if (tag.subscription_cancelled) return res.status(400).json({ error: 'Already cancelled' });
     await supabase.from('tags').update({ subscription_cancelled: true, subscription_cancel_date: new Date().toISOString() }).eq('id', id);
-    res.json({ message: `Renewal cancelled for ${tag.fqdn}. It remains active until end of current period.` });
+    res.json({ message: `Renewal cancelled for ${tag.fqdn}.` });
   } catch (err) { next(err); }
 });
 
@@ -92,8 +112,7 @@ router.post('/purchase', requireAuth, async (req, res, next) => {
   try {
     const { subdomain, domain } = req.body;
     if (!subdomain || !domain) return res.status(400).json({ error: 'subdomain and domain are required' });
-    if (!AVAILABLE_DOMAINS.includes(domain)) return res.status(400).json({ error: 'Invalid domain' });
-    if (!validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain format' });
+    if (!AVAILABLE_DOMAINS.includes(domain) || !validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain' });
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
     const { data: tag, error } = await supabase.from('tags').insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
@@ -105,9 +124,8 @@ router.post('/purchase', requireAuth, async (req, res, next) => {
 router.post('/request', requireAuth, async (req, res, next) => {
   try {
     const { subdomain, domain, name, useCase, message } = req.body;
-    if (!subdomain || !domain || !name || !useCase) return res.status(400).json({ error: 'subdomain, domain, name and useCase are required' });
-    if (!AVAILABLE_DOMAINS.includes(domain)) return res.status(400).json({ error: 'Invalid domain' });
-    if (!validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain format' });
+    if (!subdomain || !domain || !name || !useCase) return res.status(400).json({ error: 'Missing required fields' });
+    if (!AVAILABLE_DOMAINS.includes(domain) || !validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain' });
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
     const { data: request, error: dbErr } = await supabase.from('subdomain_requests')
@@ -175,7 +193,7 @@ router.delete('/:id/dns', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { data: tag } = await supabase.from('tags').select('*').eq('id', id).eq('owner_id', req.user.id).single();
-    if (!tag) return res.status(404).json({ error: 'Subdomain not found' });
+    if (!tag || !tag.dns_record_id) return res.status(404).json({ error: 'Not found' });
     await deleteDnsRecord({ domain: tag.domain, recordId: tag.dns_record_id });
     await supabase.from('tags').update({ dns_record_id: null, dns_type: null, dns_value: null, dns_proxied: 0 }).eq('id', id);
     res.json({ message: 'DNS record deleted' });
@@ -192,5 +210,7 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     res.json({ message: 'Subdomain released' });
   } catch (err) { next(err); }
 });
+
+module.exports = router;
 
 export default router;

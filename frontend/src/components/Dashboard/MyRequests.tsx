@@ -1,10 +1,10 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────
-// MyRequests.tsx — shows user's submitted requests with status.
-//
-// Fix: admin_comment is now ALWAYS shown when it exists,
-// regardless of price_status or request status. Admin messages
-// should be visible in all states, not hidden by conditions.
+// MyRequests.tsx
+// Added: rejected requests show an [x] button in the top-right
+// corner. Clicking it calls dismiss endpoint and hides the card.
+// Dismissed requests are filtered out server-side in the
+// my-requests endpoint so they never come back on refresh.
 // ─────────────────────────────────────────────────────────────
 
 import React, { useState } from 'react';
@@ -43,16 +43,17 @@ export default function MyRequests({ requests, onRefresh }) {
 }
 
 function RequestCard({ request: r, onRefresh }) {
-  const [busy,  setBusy]  = useState(false);
-  const [error, setError] = useState('');
+  const [busy,         setBusy]         = useState(false);
+  const [dismissBusy,  setDismissBusy]  = useState(false);
+  const [error,        setError]        = useState('');
 
-  const statusColor        = STATUS_COLOR[r.status] || 'var(--muted)';
-  const priceProposed      = r.price_status === 'proposed';
-  const priceAccepted      = r.price_status === 'accepted';
-  const priceDeclined      = r.price_status === 'declined';
-  const priceStr           = formatPrice(r.price_usd, r.price_chf, r.price_eur);
+  const statusColor   = STATUS_COLOR[r.status] || 'var(--muted)';
+  const priceProposed = r.price_status === 'proposed';
+  const priceAccepted = r.price_status === 'accepted';
+  const priceDeclined = r.price_status === 'declined';
+  const priceStr      = formatPrice(r.price_usd, r.price_chf, r.price_eur);
+  const isRejected    = r.status === 'rejected';
 
-  // Badge label reflects the most informative current state
   function badgeLabel() {
     if (priceProposed) return 'PRICE PROPOSED';
     if (priceAccepted) return 'PRICE ACCEPTED';
@@ -79,20 +80,40 @@ function RequestCard({ request: r, onRefresh }) {
     finally { setBusy(false); }
   }
 
+  // Dismiss — only available on rejected requests
+  async function handleDismiss() {
+    setDismissBusy(true);
+    try { await api.dismissRequest(r.id); onRefresh(); }
+    catch (err) { setError(err.message); setDismissBusy(false); }
+  }
+
   return (
     <div style={{ ...s.card, borderTopColor: badgeBg() }}>
       <div style={s.cardHead}>
         <span style={s.fqdn}>{r.fqdn}</span>
-        <span style={{ ...s.badge, background: badgeBg(), color: priceProposed || priceDeclined ? '#F8F8F8' : (r.status==='pending' ? '#0A0A0A' : '#F8F8F8') }}>
-          {badgeLabel()}
-        </span>
+        <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+          <span style={{ ...s.badge, background: badgeBg(), color: (priceProposed||priceDeclined||isRejected) ? '#F8F8F8' : (r.status==='pending' ? '#0A0A0A' : '#F8F8F8') }}>
+            {badgeLabel()}
+          </span>
+          {/* X dismiss button — only on rejected cards */}
+          {isRejected && (
+            <button
+              onClick={handleDismiss}
+              disabled={dismissBusy}
+              title="Hide this rejected request"
+              style={s.dismissBtn}
+            >
+              {dismissBusy ? '…' : '×'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={s.cardBody}>
         <Row k="use_case" v={r.use_case} />
         <Row k="status"   v={STATUS_DESC[r.status] || r.status} muted />
 
-        {/* Admin comment — shown whenever it exists, no conditions */}
+        {/* Admin comment — always shown when it exists */}
         {r.admin_comment && (
           <div style={s.commentAlert}>
             <div style={s.alertHead}>
@@ -103,7 +124,7 @@ function RequestCard({ request: r, onRefresh }) {
           </div>
         )}
 
-        {/* Price proposal — shown when admin proposed a price */}
+        {/* Price proposal */}
         {priceStr && (
           <div style={{ ...s.priceBox, borderColor: priceProposed ? 'rgba(26,92,255,0.4)' : 'var(--border)', background: priceProposed ? 'rgba(26,92,255,0.04)' : 'var(--bg-2)' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
@@ -112,8 +133,6 @@ function RequestCard({ request: r, onRefresh }) {
               </span>
             </div>
             <span style={{ fontFamily:'var(--font-display)', fontSize:'16px', color:'var(--text)', letterSpacing:'0.5px' }}>{priceStr}</span>
-
-            {/* Accept / Decline buttons — only when proposal is still open */}
             {priceProposed && (
               <>
                 {error && <p style={{ fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--red)', marginTop:'6px' }}>ERR: {error}</p>}
@@ -163,8 +182,26 @@ const s = {
   cardHead:   { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px' },
   fqdn:       { fontFamily:'var(--font-display)', fontSize:'14px', letterSpacing:'0.3px', wordBreak:'break-all' },
   badge:      { fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 8px', letterSpacing:'1.5px', flexShrink:0 },
-  cardBody:   { padding:'12px 14px', display:'flex', flexDirection:'column', gap:'8px' },
 
+  // Dismiss X — styled like a small close button, red on hover
+  dismissBtn: {
+    background:   'transparent',
+    border:       '1px solid var(--red)',
+    color:        'var(--red)',
+    fontFamily:   'var(--font-mono)',
+    fontSize:     '14px',
+    lineHeight:    1,
+    width:        '22px',
+    height:       '22px',
+    display:      'flex',
+    alignItems:   'center',
+    justifyContent:'center',
+    cursor:       'pointer',
+    flexShrink:    0,
+    transition:   'background 0.15s, color 0.15s',
+  },
+
+  cardBody:   { padding:'12px 14px', display:'flex', flexDirection:'column', gap:'8px' },
   row:        { display:'flex', alignItems:'flex-start', fontSize:'12px' },
   rowKey:     { fontFamily:'var(--font-display)', color:'var(--gold)', minWidth:'90px', fontSize:'10px', letterSpacing:'0.3px', flexShrink:0, paddingTop:'1px' },
   rowEq:      { fontFamily:'var(--font-mono)', color:'var(--muted)', padding:'0 8px', flexShrink:0 },
