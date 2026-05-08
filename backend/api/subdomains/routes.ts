@@ -100,11 +100,19 @@ router.post('/requests/:id/decline-price', requireAuth, async (req, res, next) =
 router.post('/:id/cancel-subscription', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { data: tag } = await supabase.from('tags').select('*').eq('id', id).eq('owner_id', req.user.id).single();
+    const { data: tag } = await supabase
+      .from('tags').select('*').eq('id', id).eq('owner_id', req.user.id).single();
     if (!tag) return res.status(404).json({ error: 'Subdomain not found' });
-    if (tag.subscription_cancelled) return res.status(400).json({ error: 'Already cancelled' });
-    await supabase.from('tags').update({ subscription_cancelled: true, subscription_cancel_date: new Date().toISOString() }).eq('id', id);
-    res.json({ message: `Renewal cancelled for ${tag.fqdn}.` });
+
+    // Delete Cloudflare DNS record if exists
+    if (tag.dns_record_id) {
+      try { await deleteDnsRecord({ domain: tag.domain, recordId: tag.dns_record_id }); }
+      catch (e) { console.warn('CF DNS delete warning:', e.message); }
+    }
+
+    // Fully delete the tag — releases subdomain for repurchase
+    await supabase.from('tags').delete().eq('id', id);
+    res.json({ message: `${tag.fqdn} released successfully.` });
   } catch (err) { next(err); }
 });
 
