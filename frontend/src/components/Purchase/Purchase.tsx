@@ -85,7 +85,6 @@ export default function Purchase() {
   }
 
   const fqdn     = subdomain && domain ? `${subdomain}.${domain}` : null;
-  // canClaim is the single source of truth for whether the user can proceed
   const canClaim = !!(avail?.available && !checking);
 
   return (
@@ -167,7 +166,7 @@ export default function Purchase() {
               <div style={s.ctaContent}>
                 <span style={s.ctaName}>submit_request()</span>
                 <span style={s.ctaDesc}>fill a form -- we review -- pay manually</span>
-                <Btn variant="blue" onClick={() => canClaim && setShowForm(true)} style={{ marginTop:'10px' }}>
+                <Btn variant="blue" onClick={() => canClaim && setShowForm(true)} style={{ marginTop:'10px' }} marquee>
                   &#9658; REQUEST THIS DOMAIN
                 </Btn>
               </div>
@@ -186,7 +185,7 @@ export default function Purchase() {
               <div style={s.ctaContent}>
                 <span style={{ ...s.ctaName, color:'var(--green)' }}>stripe.checkout()</span>
                 <span style={{ ...s.ctaDesc, color:'var(--muted)' }}>card payment -- auto-activate on success</span>
-                <Btn variant="primary" onClick={() => canClaim && handleStripe()} disabled={stripeLoading} style={{ marginTop:'10px' }}>
+                <Btn variant="primary" onClick={() => canClaim && handleStripe()} disabled={stripeLoading} style={{ marginTop:'10px' }} marquee>
                   {stripeLoading ? '// redirecting...' : '▶ PAY WITH STRIPE'}
                 </Btn>
               </div>
@@ -242,7 +241,6 @@ export default function Purchase() {
   );
 }
 
-// Red "FRAGILE" style stamp shown when subdomain not yet entered
 function FragileStamp({ dark = false }) {
   return (
     <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, pointerEvents:'none' }}>

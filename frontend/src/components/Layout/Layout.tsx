@@ -1,68 +1,47 @@
 // @ts-nocheck
-// TypeScript migration in progress — full types will be added gradually.
-// @ts-nocheck suppresses type errors on this file so the build passes
-// while the rest of the codebase is already fully typed.
+// Sticky layout: navbar top, status bar bottom, only main scrolls.
+// Key: outer shell is height:100dvh + overflow:hidden.
+// Content row is flex:1 + min-height:0 (Firefox fix).
+// Only <main> has overflow-y:auto.
+
 import React from 'react';
 import Navbar from './Navbar';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function Layout({ children }) {
-  return (
-    <div style={{ minHeight:'100dvh', display:'flex', flexDirection:'column' }}>
-      <Navbar />
-      <div style={{ display:'flex', flex:1, minWidth:0 }}>
-        <div className="line-numbers" style={s.lines}>
-          {Array.from({ length: 60 }, (_, i) => (
-            <div key={i} style={s.lineNum}>{i + 1}</div>
-          ))}
-        </div>
-        <main style={s.main}>
-          {children}
-        </main>
-      </div>
-      <StatusBar />
-    </div>
-  );
-}
+  const isMobile = useIsMobile(768);
 
-function StatusBar() {
   return (
-    <div style={s.bar}>
-      <span style={s.barItem}>SubMarket</span>
-      <span style={s.barItem}>UTF-8</span>
-      <span style={s.barItemHide}>JavaScript JSX</span>
-      <span style={{ ...s.barItem, marginLeft:'auto' }}>v1.0</span>
+    <div style={s.shell}>
+      <Navbar />
+
+      <div style={s.contentRow}>
+        {!isMobile && (
+          <div style={s.lineNumbers}>
+            {Array.from({ length: 80 }, (_, i) => (
+              <div key={i} style={s.lineNum}>{i + 1}</div>
+            ))}
+          </div>
+        )}
+        <main style={s.main}>{children}</main>
+      </div>
+
+      <div style={s.statusBar}>
+        <span style={s.si}>SubMarket</span>
+        {!isMobile && <span style={s.si}>UTF-8</span>}
+        {!isMobile && <span style={s.si}>JavaScript JSX</span>}
+        <span style={{ ...s.si, marginLeft:'auto' }}>v1.0</span>
+      </div>
     </div>
   );
 }
 
 const s = {
-  lines: {
-    width:'44px', flexShrink:0, paddingTop:'32px',
-    borderRight:'1px solid var(--border)', background:'var(--surface)',
-  },
-  lineNum: {
-    height:'20px', lineHeight:'20px', textAlign:'right',
-    paddingRight:'10px', fontSize:'10px', color:'var(--border)',
-    userSelect:'none', fontFamily:'var(--font-mono)',
-  },
-  main: {
-    flex:1, minWidth:0,
-    padding:'clamp(16px, 4vw, 32px) clamp(16px, 4vw, 40px)',
-    maxWidth:'1100px', width:'100%',
-  },
-  bar: {
-    display:'flex', alignItems:'center', height:'22px',
-    background:'var(--green)', flexShrink:0,
-  },
-  barItem: {
-    padding:'0 10px', fontSize:'11px', color:'#0A0A0A',
-    fontFamily:'var(--font-display)', borderRight:'1px solid rgba(0,0,0,0.15)',
-    letterSpacing:'0.5px', whiteSpace:'nowrap',
-  },
-  barItemHide: {
-    padding:'0 10px', fontSize:'11px', color:'#0A0A0A',
-    fontFamily:'var(--font-display)', borderRight:'1px solid rgba(0,0,0,0.15)',
-    letterSpacing:'0.5px',
-    // hide on small screens via media — done in CSS class
-  },
+  shell:       { height:'100dvh', display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--bg)' },
+  contentRow:  { display:'flex', flex:1, minHeight:0, overflow:'hidden' },
+  lineNumbers: { width:'44px', flexShrink:0, paddingTop:'28px', borderRight:'1px solid var(--border)', background:'var(--surface)', overflowY:'hidden' },
+  lineNum:     { height:'20px', lineHeight:'20px', textAlign:'right', paddingRight:'10px', fontSize:'10px', color:'var(--border)', userSelect:'none', fontFamily:'var(--font-mono)' },
+  main:        { flex:1, minWidth:0, overflowY:'auto', padding:'clamp(16px,4vw,32px) clamp(16px,4vw,40px)', maxWidth:'1100px', width:'100%' },
+  statusBar:   { display:'flex', alignItems:'center', height:'22px', background:'var(--green)', flexShrink:0 },
+  si:          { padding:'0 10px', fontSize:'11px', color:'#0A0A0A', fontFamily:'var(--font-display)', borderRight:'1px solid rgba(0,0,0,0.15)', letterSpacing:'0.5px', whiteSpace:'nowrap' },
 };

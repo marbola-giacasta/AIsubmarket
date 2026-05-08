@@ -1,55 +1,34 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────
-// Btn.tsx — animated button with optional marquee text.
+// Btn.tsx — animated button.
 //
-// When marquee={true} the text scrolls left to right infinitely
-// inside the button bounds. I duplicate the text so the scroll
-// loops seamlessly without a visible gap or jump.
-//
-// Animations:
-//   hover   → colour inversion + shimmer sweep
-//   click   → ripple from click point + scale press
-//   marquee → continuous horizontal text scroll
+// marquee prop: text scrolls left indefinitely inside the button.
+// Works by:
+//   1. Button itself has overflow:hidden (needed for ripple/shimmer)
+//   2. A block-level inner span fills the button width (flex:1)
+//   3. Inside it, the text is doubled in an inline-flex span
+//   4. CSS translates the doubled span from 0 to -50%, 
+//      which moves the first copy out while the second takes over.
+//      At -50% everything loops back to 0 seamlessly.
 // ─────────────────────────────────────────────────────────────
 
-import React, { useState, useRef, CSSProperties, MouseEvent, TouchEvent } from 'react';
+import React, { useState, useRef } from 'react';
 
-type BtnVariant = 'primary' | 'dark' | 'ghost' | 'blue' | 'gold' | 'danger' | 'admin';
+type BtnVariant = 'primary'|'dark'|'ghost'|'blue'|'gold'|'danger'|'admin';
 
-interface BtnProps {
-  children:  React.ReactNode;
-  onClick?:  () => void;
-  type?:     'button' | 'submit' | 'reset';
-  disabled?: boolean;
-  variant?:  BtnVariant;
-  style?:    CSSProperties;
-  // When true the button text scrolls horizontally in a loop
-  marquee?:  boolean;
-}
-
-interface Ripple { id: number; x: number; y: number; }
-
-interface VariantStyle {
-  bg: string; bgHover: string; color: string; colorHover: string;
-  border: string; borderHover: string; shimmer: string; ripple: string;
-}
-
-export default function Btn({
-  children, onClick, type = 'button', disabled = false,
-  variant = 'primary', style: extra = {}, marquee = false,
-}: BtnProps) {
+export default function Btn({ children, onClick, type='button', disabled=false, variant='primary', style:extra={}, marquee=false }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const [ripples, setRipples] = useState<Ripple[]>([]);
-  const ref = useRef<HTMLButtonElement>(null);
-  const v   = VARIANTS[variant];
+  const [ripples, setRipples] = useState([]);
+  const ref = useRef(null);
+  const v   = VARIANTS[variant] || VARIANTS.primary;
 
-  function spawnRipple(clientX: number, clientY: number) {
+  function spawnRipple(clientX, clientY) {
     if (disabled || !ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     const id   = Date.now();
-    setRipples(prev => [...prev, { id, x: clientX - rect.left, y: clientY - rect.top }]);
-    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 600);
+    setRipples(p => [...p, { id, x: clientX - rect.left, y: clientY - rect.top }]);
+    setTimeout(() => setRipples(p => p.filter(r => r.id !== id)), 600);
   }
 
   return (
@@ -57,74 +36,78 @@ export default function Btn({
       ref={ref} type={type} disabled={disabled} onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
-      onMouseDown={(e: MouseEvent<HTMLButtonElement>) => { setPressed(true); spawnRipple(e.clientX, e.clientY); }}
+      onMouseDown={e  => { setPressed(true); spawnRipple(e.clientX, e.clientY); }}
       onMouseUp={() => setPressed(false)}
-      onTouchStart={(e: TouchEvent<HTMLButtonElement>) => { setHovered(true); if (e.touches[0]) spawnRipple(e.touches[0].clientX, e.touches[0].clientY); }}
+      onTouchStart={e => { setHovered(true); e.touches[0] && spawnRipple(e.touches[0].clientX, e.touches[0].clientY); }}
       onTouchEnd={() => setHovered(false)}
       style={{
-        position: 'relative', overflow: 'hidden',
-        display: 'inline-flex', alignItems: 'center',
-        // When marquee is on I need a fixed width so text scrolls within bounds
-        padding: '9px 20px',
-        background:    hovered ? v.bgHover    : v.bg,
-        border:        `2px solid ${hovered  ? v.borderHover : v.border}`,
-        color:         hovered ? v.colorHover : v.color,
-        fontFamily:    'var(--font-display)',
-        fontSize:      '13px', letterSpacing: '0.5px',
-        cursor:        disabled ? 'not-allowed' : 'pointer',
-        opacity:       disabled ? 0.45 : 1,
-        transform:     pressed ? 'scale(0.96) translateY(1px)' : 'scale(1)',
-        transition:    'background 0.15s, color 0.15s, border-color 0.15s, transform 0.08s',
-        userSelect:    'none', touchAction: 'manipulation',
-        whiteSpace:    marquee ? 'nowrap' : 'nowrap',
+        position:     'relative',
+        overflow:     'hidden',   // clips shimmer, ripple, AND marquee text
+        display:      'inline-flex',
+        alignItems:   'center',
+        padding:      '9px 20px',
+        background:   hovered ? v.bgHover    : v.bg,
+        border:       `2px solid ${hovered  ? v.borderHover : v.border}`,
+        color:        hovered ? v.colorHover : v.color,
+        fontFamily:   'var(--font-display)',
+        fontSize:     '13px',
+        letterSpacing:'0.5px',
+        cursor:       disabled ? 'not-allowed' : 'pointer',
+        opacity:      disabled ? 0.45 : 1,
+        transform:    pressed  ? 'scale(0.96) translateY(1px)' : 'scale(1)',
+        transition:   'background 0.15s, color 0.15s, border-color 0.15s, transform 0.08s',
+        userSelect:   'none',
+        touchAction:  'manipulation',
+        // When marquee is on, button stretches to fill its container
+        // so the text has a proper width to scroll within
+        width:        marquee ? '100%' : undefined,
         ...extra,
       }}
     >
-      {/* Shimmer sweep on hover */}
+      {/* Shimmer on hover */}
       {hovered && !disabled && (
         <span style={{ position:'absolute', inset:0, pointerEvents:'none',
-          background: `linear-gradient(105deg,transparent 40%,${v.shimmer} 50%,transparent 60%)`,
-          animation: 'shimmer 0.55s ease forwards' }} />
+          background:`linear-gradient(105deg,transparent 40%,${v.shimmer} 50%,transparent 60%)`,
+          animation:'shimmer 0.55s ease forwards' }} />
       )}
 
-      {/* Click ripples */}
+      {/* Ripple on click */}
       {ripples.map(r => (
-        <span key={r.id} style={{ position:'absolute', left:r.x, top:r.y,
-          width:'6px', height:'6px', borderRadius:'50%', background:v.ripple,
-          transform:'translate(-50%,-50%) scale(0)',
+        <span key={r.id} style={{ position:'absolute', left:r.x, top:r.y, width:'6px', height:'6px',
+          borderRadius:'50%', background:v.ripple, transform:'translate(-50%,-50%) scale(0)',
           animation:'rippleOut 0.6s ease-out forwards', pointerEvents:'none' }} />
       ))}
 
-      {/* Marquee: duplicate the text and scroll the pair left by 50% */}
       {marquee ? (
-        <span style={{
-          display:    'block',
-          overflow:   'hidden',
-          width:      '120px',   // fixed width — text scrolls inside this box
-        }}>
+        // Outer span: fills the button, clips the scrolling text at both edges
+        <span style={{ display:'block', overflow:'hidden', flex:1, minWidth:0 }}>
+          {/* Inner span: text doubled side by side, animates translateX(0) → (-50%) */}
           <span style={{
-            display:    'inline-flex',
-            animation:  disabled ? 'none' : 'marqueeScroll 3s linear infinite',
-            willChange: 'transform',
-            whiteSpace: 'nowrap',
+            display:   'inline-flex',
+            whiteSpace:'nowrap',
+            animation: disabled ? 'none' : 'marqueeScroll 3.5s linear infinite',
+            willChange:'transform',
           }}>
-            <span style={{ paddingRight: '24px' }}>{children}</span>
-            <span style={{ paddingRight: '24px' }}>{children}</span>
+            {/* First copy — scrolls out to the left */}
+            <span style={{ paddingRight:'36px' }}>{children}</span>
+            {/* Second copy — appears from right as first exits */}
+            <span style={{ paddingRight:'36px' }}>{children}</span>
           </span>
         </span>
       ) : (
-        children
+        // Normal: text is centred, never clips (button sizes to content)
+        <span style={{ whiteSpace:'nowrap' }}>{children}</span>
       )}
     </button>
   );
 }
 
-const VARIANTS: Record<BtnVariant, VariantStyle> = {
-  primary: { bg:'var(--green)',  bgHover:'#0A0A0A',     color:'#0A0A0A',      colorHover:'var(--green)',  border:'var(--green)',  borderHover:'var(--green)',  shimmer:'rgba(255,255,255,0.35)', ripple:'rgba(0,0,0,0.25)' },
-  dark:    { bg:'#0A0A0A',       bgHover:'var(--green)', color:'var(--green)', colorHover:'#0A0A0A',       border:'#0A0A0A',       borderHover:'var(--green)',  shimmer:'rgba(58,255,110,0.25)',  ripple:'rgba(58,255,110,0.3)' },
-  ghost:   { bg:'transparent',   bgHover:'#0A0A0A',      color:'#0A0A0A',      colorHover:'#F8F8F8',       border:'#0A0A0A',       borderHover:'#0A0A0A',       shimmer:'rgba(255,255,255,0.2)',  ripple:'rgba(0,0,0,0.15)' },
-  blue:    { bg:'transparent',   bgHover:'var(--blue)',  color:'var(--blue)',  colorHover:'#F8F8F8',       border:'var(--blue)',   borderHover:'var(--blue)',   shimmer:'rgba(255,255,255,0.25)', ripple:'rgba(26,92,255,0.25)' },
-  gold:    { bg:'transparent',   bgHover:'var(--gold)',  color:'var(--gold)',  colorHover:'#0A0A0A',       border:'var(--gold)',   borderHover:'var(--gold)',   shimmer:'rgba(255,255,255,0.25)', ripple:'rgba(201,147,42,0.3)' },
-  danger:  { bg:'transparent',   bgHover:'var(--red)',   color:'var(--red)',   colorHover:'#F8F8F8',       border:'var(--red)',    borderHover:'var(--red)',    shimmer:'rgba(255,255,255,0.2)',  ripple:'rgba(192,57,43,0.2)' },
-  admin:   { bg:'var(--gold)',    bgHover:'#0A0A0A',      color:'#0A0A0A',      colorHover:'var(--gold)',   border:'var(--gold)',   borderHover:'var(--gold)',   shimmer:'rgba(255,255,255,0.3)',  ripple:'rgba(0,0,0,0.2)' },
+const VARIANTS = {
+  primary:{ bg:'var(--green)',  bgHover:'#0A0A0A',     color:'#0A0A0A',     colorHover:'var(--green)',  border:'var(--green)',  borderHover:'var(--green)',  shimmer:'rgba(255,255,255,0.35)', ripple:'rgba(0,0,0,0.25)' },
+  dark:   { bg:'#0A0A0A',       bgHover:'var(--green)', color:'var(--green)',colorHover:'#0A0A0A',       border:'#0A0A0A',       borderHover:'var(--green)',  shimmer:'rgba(58,255,110,0.25)',  ripple:'rgba(58,255,110,0.3)' },
+  ghost:  { bg:'transparent',   bgHover:'#0A0A0A',      color:'#0A0A0A',     colorHover:'#F8F8F8',       border:'#0A0A0A',       borderHover:'#0A0A0A',       shimmer:'rgba(255,255,255,0.2)',  ripple:'rgba(0,0,0,0.15)' },
+  blue:   { bg:'transparent',   bgHover:'var(--blue)',  color:'var(--blue)', colorHover:'#F8F8F8',       border:'var(--blue)',   borderHover:'var(--blue)',   shimmer:'rgba(255,255,255,0.25)', ripple:'rgba(26,92,255,0.25)' },
+  gold:   { bg:'transparent',   bgHover:'var(--gold)',  color:'var(--gold)', colorHover:'#0A0A0A',       border:'var(--gold)',   borderHover:'var(--gold)',   shimmer:'rgba(255,255,255,0.25)', ripple:'rgba(201,147,42,0.3)' },
+  danger: { bg:'transparent',   bgHover:'var(--red)',   color:'var(--red)',  colorHover:'#F8F8F8',       border:'var(--red)',    borderHover:'var(--red)',    shimmer:'rgba(255,255,255,0.2)',  ripple:'rgba(192,57,43,0.2)' },
+  admin:  { bg:'var(--gold)',    bgHover:'#0A0A0A',      color:'#0A0A0A',     colorHover:'var(--gold)',   border:'var(--gold)',   borderHover:'var(--gold)',   shimmer:'rgba(255,255,255,0.3)',  ripple:'rgba(0,0,0,0.2)' },
 };
