@@ -1,20 +1,13 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────
-// Btn.tsx — animated button.
-//
-// marquee prop: text scrolls left indefinitely inside the button.
-// Works by:
-//   1. Button itself has overflow:hidden (needed for ripple/shimmer)
-//   2. A block-level inner span fills the button width (flex:1)
-//   3. Inside it, the text is doubled in an inline-flex span
-//   4. CSS translates the doubled span from 0 to -50%, 
-//      which moves the first copy out while the second takes over.
-//      At -50% everything loops back to 0 seamlessly.
+// Btn.tsx
+// Marquee fix: the scrolling track needs width:max-content so
+// the browser measures the true doubled-text width, not the
+// container width. Only then does translateX(-50%) move exactly
+// one copy's worth to the left and loop seamlessly.
 // ─────────────────────────────────────────────────────────────
 
 import React, { useState, useRef } from 'react';
-
-type BtnVariant = 'primary'|'dark'|'ghost'|'blue'|'gold'|'danger'|'admin';
 
 export default function Btn({ children, onClick, type='button', disabled=false, variant='primary', style:extra={}, marquee=false }) {
   const [hovered, setHovered] = useState(false);
@@ -42,10 +35,12 @@ export default function Btn({ children, onClick, type='button', disabled=false, 
       onTouchEnd={() => setHovered(false)}
       style={{
         position:     'relative',
-        overflow:     'hidden',   // clips shimmer, ripple, AND marquee text
+        overflow:     'hidden',
         display:      'inline-flex',
         alignItems:   'center',
         padding:      '9px 20px',
+        // marquee buttons fill their container so the text has room to scroll
+        width:        marquee ? '100%' : undefined,
         background:   hovered ? v.bgHover    : v.bg,
         border:       `2px solid ${hovered  ? v.borderHover : v.border}`,
         color:        hovered ? v.colorHover : v.color,
@@ -58,44 +53,41 @@ export default function Btn({ children, onClick, type='button', disabled=false, 
         transition:   'background 0.15s, color 0.15s, border-color 0.15s, transform 0.08s',
         userSelect:   'none',
         touchAction:  'manipulation',
-        // When marquee is on, button stretches to fill its container
-        // so the text has a proper width to scroll within
-        width:        marquee ? '100%' : undefined,
         ...extra,
       }}
     >
-      {/* Shimmer on hover */}
       {hovered && !disabled && (
         <span style={{ position:'absolute', inset:0, pointerEvents:'none',
           background:`linear-gradient(105deg,transparent 40%,${v.shimmer} 50%,transparent 60%)`,
           animation:'shimmer 0.55s ease forwards' }} />
       )}
-
-      {/* Ripple on click */}
       {ripples.map(r => (
         <span key={r.id} style={{ position:'absolute', left:r.x, top:r.y, width:'6px', height:'6px',
-          borderRadius:'50%', background:v.ripple, transform:'translate(-50%,-50%) scale(0)',
+          borderRadius:'50%', background:v.ripple,
+          transform:'translate(-50%,-50%) scale(0)',
           animation:'rippleOut 0.6s ease-out forwards', pointerEvents:'none' }} />
       ))}
 
       {marquee ? (
-        // Outer span: fills the button, clips the scrolling text at both edges
+        // Clip window: fills the button, hides overflow on both sides
         <span style={{ display:'block', overflow:'hidden', flex:1, minWidth:0 }}>
-          {/* Inner span: text doubled side by side, animates translateX(0) → (-50%) */}
+          {/*
+            Track: width:max-content forces the browser to measure
+            the true natural width of BOTH copies combined.
+            translateX(-50%) then equals exactly one copy's width.
+          */}
           <span style={{
             display:   'inline-flex',
+            width:     'max-content',
             whiteSpace:'nowrap',
             animation: disabled ? 'none' : 'marqueeScroll 3.5s linear infinite',
             willChange:'transform',
           }}>
-            {/* First copy — scrolls out to the left */}
-            <span style={{ paddingRight:'36px' }}>{children}</span>
-            {/* Second copy — appears from right as first exits */}
-            <span style={{ paddingRight:'36px' }}>{children}</span>
+            <span style={{ paddingRight:'40px' }}>{children}</span>
+            <span style={{ paddingRight:'40px' }}>{children}</span>
           </span>
         </span>
       ) : (
-        // Normal: text is centred, never clips (button sizes to content)
         <span style={{ whiteSpace:'nowrap' }}>{children}</span>
       )}
     </button>

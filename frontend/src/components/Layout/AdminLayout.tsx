@@ -1,6 +1,4 @@
 // @ts-nocheck
-// Same sticky shell pattern as Layout.tsx — navbar top, gold bar bottom.
-
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,23 +10,29 @@ export default function AdminLayout({ children }) {
   const isMobile             = useIsMobile(768);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const tabs = [
+    { to:'/admin',              label:'requests.js' },
+    { to:'/admin/registered',   label:'registered.js' },
+    { to:'/admin/root-domains', label:'domains.js' },
+    { to:'/admin/users',        label:'users.js' },
+  ];
+
   return (
     <div style={s.shell}>
-      {/* Top bar */}
       <div style={s.topBar}>
         <div style={s.topLeft}>
           <span style={s.adminBadge}>ADMIN</span>
           <span style={s.siteName}># SubMarket</span>
         </div>
-
         {!isMobile && (
           <div style={s.nav}>
-            <NavLink to="/admin"         active={pathname==='/admin'}>requests.js</NavLink>
-            <NavLink to="/admin/domains" active={pathname==='/admin/domains'}>all_domains.js</NavLink>
-            <NavLink to="/admin/users"   active={pathname==='/admin/users'}>users.js</NavLink>
+            {tabs.map(t => (
+              <Link key={t.to} to={t.to} style={{ ...s.navLink, ...(pathname===t.to ? s.navLinkActive : {}) }}>
+                {pathname===t.to && <span style={s.navDot} />}{t.label}
+              </Link>
+            ))}
           </div>
         )}
-
         <div style={s.topRight}>
           {!isMobile && <span style={s.adminEmail}>{user?.email}</span>}
           <button onClick={logoutUser} style={s.logoutBtn}>[ logout ]</button>
@@ -40,25 +44,23 @@ export default function AdminLayout({ children }) {
         </div>
       </div>
 
-      {/* Mobile dropdown */}
       {isMobile && menuOpen && (
         <div style={s.dropdown}>
-          <DropLink to="/admin"         active={pathname==='/admin'}         onClick={() => setMenuOpen(false)}>requests.js</DropLink>
-          <DropLink to="/admin/domains" active={pathname==='/admin/domains'} onClick={() => setMenuOpen(false)}>all_domains.js</DropLink>
-          <DropLink to="/admin/users"   active={pathname==='/admin/users'}   onClick={() => setMenuOpen(false)}>users.js</DropLink>
+          {tabs.map(t => (
+            <Link key={t.to} to={t.to} onClick={() => setMenuOpen(false)} style={s.dropLink}>
+              <span style={{ color: pathname===t.to ? 'var(--gold)' : 'var(--muted)' }}>
+                {pathname===t.to ? '> ' : '  '}{t.label}
+              </span>
+            </Link>
+          ))}
           <div style={{ padding:'10px 20px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)' }}>{user?.email}</div>
         </div>
       )}
 
-      {/* Gold accent line */}
       <div style={s.accentBar} />
-
-      {/* Scrollable content */}
       <div style={s.contentRow}>
         <main style={s.main}>{children}</main>
       </div>
-
-      {/* Sticky status bar */}
       <div style={s.statusBar}>
         <span style={s.si}>SubMarket Admin</span>
         {!isMobile && <span style={s.si}>{user?.email}</span>}
@@ -68,33 +70,18 @@ export default function AdminLayout({ children }) {
   );
 }
 
-function NavLink({ to, active, children }) {
-  return (
-    <Link to={to} style={{ ...s.navLink, ...(active ? s.navLinkActive : {}) }}>
-      {active && <span style={s.navDot} />}{children}
-    </Link>
-  );
-}
-function DropLink({ to, active, onClick, children }) {
-  return (
-    <Link to={to} onClick={onClick} style={s.dropLink}>
-      <span style={{ color: active ? 'var(--gold)' : 'var(--muted)' }}>{active ? '> ' : '  '}{children}</span>
-    </Link>
-  );
-}
-
 const s = {
   shell:        { height:'100dvh', display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--bg)' },
   topBar:       { display:'flex', alignItems:'stretch', height:'48px', background:'var(--surface-dark)', borderBottom:'1px solid var(--border-dark)', flexShrink:0 },
-  topLeft:      { display:'flex', alignItems:'center', gap:'10px', padding:'0 16px', borderRight:'1px solid var(--border-dark)', flexShrink:0 },
+  topLeft:      { display:'flex', alignItems:'center', gap:'10px', padding:'0 14px', borderRight:'1px solid var(--border-dark)', flexShrink:0 },
   adminBadge:   { fontFamily:'var(--font-display)', fontSize:'10px', letterSpacing:'2px', background:'var(--gold)', color:'#0A0A0A', padding:'2px 8px' },
-  siteName:     { fontFamily:'var(--font-display)', fontSize:'14px', color:'#F8F8F8', letterSpacing:'1px' },
-  nav:          { display:'flex', alignItems:'stretch', flex:1 },
-  navLink:      { display:'flex', alignItems:'center', gap:'7px', padding:'0 18px', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--muted)', borderRight:'1px solid var(--border-dark)', textDecoration:'none', whiteSpace:'nowrap' },
+  siteName:     { fontFamily:'var(--font-display)', fontSize:'13px', color:'#F8F8F8', letterSpacing:'1px' },
+  nav:          { display:'flex', alignItems:'stretch', flex:1, overflow:'hidden' },
+  navLink:      { display:'flex', alignItems:'center', gap:'6px', padding:'0 14px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', borderRight:'1px solid var(--border-dark)', textDecoration:'none', whiteSpace:'nowrap' },
   navLinkActive:{ color:'var(--gold)', background:'rgba(201,147,42,0.06)' },
-  navDot:       { width:'6px', height:'6px', background:'var(--gold)', display:'inline-block', flexShrink:0 },
+  navDot:       { width:'5px', height:'5px', background:'var(--gold)', display:'inline-block', flexShrink:0 },
   topRight:     { display:'flex', alignItems:'center', marginLeft:'auto', borderLeft:'1px solid var(--border-dark)' },
-  adminEmail:   { padding:'0 12px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', maxWidth:'200px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
+  adminEmail:   { padding:'0 12px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', maxWidth:'160px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
   logoutBtn:    { height:'100%', padding:'0 14px', background:'transparent', border:'none', borderLeft:'1px solid var(--border-dark)', fontFamily:'var(--font-mono)', color:'var(--muted)', fontSize:'11px', cursor:'pointer' },
   burger:       { height:'100%', padding:'0 14px', display:'flex', flexDirection:'column', justifyContent:'center', gap:'5px', background:'transparent', border:'none', borderLeft:'1px solid var(--border-dark)', cursor:'pointer' },
   bLine:        { display:'block', width:'18px', height:'2px', background:'var(--muted)' },
