@@ -1,0 +1,6 @@
+/* Add this to the end of frontend/src/index.css */
+
+@keyframes marqueeScroll {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}

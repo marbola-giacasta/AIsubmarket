@@ -99,3 +99,8 @@ select { -webkit-appearance: none; background-image: none; }
   /* Tighter padding */
   .mobile-pad { padding: 16px !important; }
 }
+
+@keyframes marqueeScroll {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}

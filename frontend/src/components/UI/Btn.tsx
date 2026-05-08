@@ -1,18 +1,19 @@
+// @ts-nocheck
 // ─────────────────────────────────────────────────────────────
-// Btn.tsx — my animated button component.
-// I built this once and reuse it everywhere instead of styling
-// plain <button> tags in each component individually.
+// Btn.tsx — animated button with optional marquee text.
 //
-// On hover: background inverts + shimmer sweep slides across.
-// On click: ripple expands from the exact click point.
-// On press: slight scale-down gives a physical "pressed" feel.
+// When marquee={true} the text scrolls left to right infinitely
+// inside the button bounds. I duplicate the text so the scroll
+// loops seamlessly without a visible gap or jump.
 //
-// Variants: primary (green), dark, ghost, blue, gold, danger, admin
+// Animations:
+//   hover   → colour inversion + shimmer sweep
+//   click   → ripple from click point + scale press
+//   marquee → continuous horizontal text scroll
 // ─────────────────────────────────────────────────────────────
 
 import React, { useState, useRef, CSSProperties, MouseEvent, TouchEvent } from 'react';
 
-// All the visual styles a button variant can take
 type BtnVariant = 'primary' | 'dark' | 'ghost' | 'blue' | 'gold' | 'danger' | 'admin';
 
 interface BtnProps {
@@ -22,132 +23,98 @@ interface BtnProps {
   disabled?: boolean;
   variant?:  BtnVariant;
   style?:    CSSProperties;
+  // When true the button text scrolls horizontally in a loop
+  marquee?:  boolean;
 }
 
-// Tracks each ripple by its click position and unique id
-interface Ripple {
-  id: number;
-  x:  number;
-  y:  number;
-}
+interface Ripple { id: number; x: number; y: number; }
 
-// All CSS values that differ between variants
 interface VariantStyle {
-  bg:          string;
-  bgHover:     string;
-  color:       string;
-  colorHover:  string;
-  border:      string;
-  borderHover: string;
-  shimmer:     string; // color of the shimmer sweep highlight
-  ripple:      string; // color of the click ripple
+  bg: string; bgHover: string; color: string; colorHover: string;
+  border: string; borderHover: string; shimmer: string; ripple: string;
 }
 
 export default function Btn({
-  children,
-  onClick,
-  type     = 'button',
-  disabled = false,
-  variant  = 'primary',
-  style:   extra = {},
+  children, onClick, type = 'button', disabled = false,
+  variant = 'primary', style: extra = {}, marquee = false,
 }: BtnProps) {
-  const [hovered, setHovered] = useState<boolean>(false);
-  const [pressed, setPressed] = useState<boolean>(false);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
   const [ripples, setRipples] = useState<Ripple[]>([]);
   const ref = useRef<HTMLButtonElement>(null);
+  const v   = VARIANTS[variant];
 
-  const v: VariantStyle = VARIANTS[variant];
-
-  function spawnRipple(clientX: number, clientY: number): void {
+  function spawnRipple(clientX: number, clientY: number) {
     if (disabled || !ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     const id   = Date.now();
-
-    // Position the ripple relative to the button's top-left corner
     setRipples(prev => [...prev, { id, x: clientX - rect.left, y: clientY - rect.top }]);
-
-    // Remove the ripple after its 600ms CSS animation finishes
     setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 600);
-  }
-
-  function handleMouseDown(e: MouseEvent<HTMLButtonElement>): void {
-    setPressed(true);
-    spawnRipple(e.clientX, e.clientY);
-  }
-
-  function handleTouchStart(e: TouchEvent<HTMLButtonElement>): void {
-    setHovered(true);
-    if (e.touches[0]) spawnRipple(e.touches[0].clientX, e.touches[0].clientY);
   }
 
   return (
     <button
-      ref={ref}
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
+      ref={ref} type={type} disabled={disabled} onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
-      onMouseDown={handleMouseDown}
+      onMouseDown={(e: MouseEvent<HTMLButtonElement>) => { setPressed(true); spawnRipple(e.clientX, e.clientY); }}
       onMouseUp={() => setPressed(false)}
-      onTouchStart={handleTouchStart}
+      onTouchStart={(e: TouchEvent<HTMLButtonElement>) => { setHovered(true); if (e.touches[0]) spawnRipple(e.touches[0].clientX, e.touches[0].clientY); }}
       onTouchEnd={() => setHovered(false)}
       style={{
-        position:     'relative',
-        overflow:     'hidden',
-        display:      'inline-flex',
-        alignItems:   'center',
-        gap:          '8px',
-        padding:      '9px 20px',
-        background:   hovered ? v.bgHover    : v.bg,
-        border:       `2px solid ${hovered  ? v.borderHover : v.border}`,
-        color:        hovered ? v.colorHover : v.color,
-        fontFamily:   'var(--font-display)',
-        fontSize:     '13px',
-        letterSpacing:'0.5px',
-        cursor:       disabled ? 'not-allowed' : 'pointer',
-        opacity:      disabled ? 0.45 : 1,
-        transform:    pressed ? 'scale(0.96) translateY(1px)' : 'scale(1)',
-        transition:   'background 0.15s, color 0.15s, border-color 0.15s, transform 0.08s',
-        userSelect:   'none',
-        whiteSpace:   'nowrap',
-        touchAction:  'manipulation',
+        position: 'relative', overflow: 'hidden',
+        display: 'inline-flex', alignItems: 'center',
+        // When marquee is on I need a fixed width so text scrolls within bounds
+        padding: '9px 20px',
+        background:    hovered ? v.bgHover    : v.bg,
+        border:        `2px solid ${hovered  ? v.borderHover : v.border}`,
+        color:         hovered ? v.colorHover : v.color,
+        fontFamily:    'var(--font-display)',
+        fontSize:      '13px', letterSpacing: '0.5px',
+        cursor:        disabled ? 'not-allowed' : 'pointer',
+        opacity:       disabled ? 0.45 : 1,
+        transform:     pressed ? 'scale(0.96) translateY(1px)' : 'scale(1)',
+        transition:    'background 0.15s, color 0.15s, border-color 0.15s, transform 0.08s',
+        userSelect:    'none', touchAction: 'manipulation',
+        whiteSpace:    marquee ? 'nowrap' : 'nowrap',
         ...extra,
       }}
     >
-      {/* Shimmer sweep — a diagonal highlight that slides across on hover */}
+      {/* Shimmer sweep on hover */}
       {hovered && !disabled && (
-        <span style={{
-          position:      'absolute',
-          inset:          0,
-          pointerEvents: 'none',
-          background:    `linear-gradient(105deg, transparent 40%, ${v.shimmer} 50%, transparent 60%)`,
-          animation:     'shimmer 0.55s ease forwards',
-        }} />
+        <span style={{ position:'absolute', inset:0, pointerEvents:'none',
+          background: `linear-gradient(105deg,transparent 40%,${v.shimmer} 50%,transparent 60%)`,
+          animation: 'shimmer 0.55s ease forwards' }} />
       )}
 
-      {/* Ripple circles — one per click, expands and fades out */}
+      {/* Click ripples */}
       {ripples.map(r => (
-        <span key={r.id} style={{
-          position:      'absolute',
-          left:           r.x,
-          top:            r.y,
-          width:         '6px',
-          height:        '6px',
-          borderRadius:  '50%',
-          background:     v.ripple,
-          transform:     'translate(-50%, -50%) scale(0)',
-          animation:     'rippleOut 0.6s ease-out forwards',
-          pointerEvents: 'none',
-        }} />
+        <span key={r.id} style={{ position:'absolute', left:r.x, top:r.y,
+          width:'6px', height:'6px', borderRadius:'50%', background:v.ripple,
+          transform:'translate(-50%,-50%) scale(0)',
+          animation:'rippleOut 0.6s ease-out forwards', pointerEvents:'none' }} />
       ))}
 
-      {children}
+      {/* Marquee: duplicate the text and scroll the pair left by 50% */}
+      {marquee ? (
+        <span style={{
+          display:    'flex',
+          // Scrolls from current position to -50% (showing the duplicate seamlessly)
+          animation:  disabled ? 'none' : 'marqueeScroll 5s linear infinite',
+          willChange: 'transform',
+        }}>
+          {/* First copy */}
+          <span style={{ paddingRight: '32px' }}>{children}</span>
+          {/* Duplicate — appears as the first copy scrolls out of view */}
+          <span style={{ paddingRight: '32px' }}>{children}</span>
+        </span>
+      ) : (
+        children
+      )}
     </button>
   );
 }
 
-// I keep all variant definitions here so I can compare them at a glance
 const VARIANTS: Record<BtnVariant, VariantStyle> = {
   primary: { bg:'var(--green)',  bgHover:'#0A0A0A',     color:'#0A0A0A',      colorHover:'var(--green)',  border:'var(--green)',  borderHover:'var(--green)',  shimmer:'rgba(255,255,255,0.35)', ripple:'rgba(0,0,0,0.25)' },
   dark:    { bg:'#0A0A0A',       bgHover:'var(--green)', color:'var(--green)', colorHover:'#0A0A0A',       border:'#0A0A0A',       borderHover:'var(--green)',  shimmer:'rgba(58,255,110,0.25)',  ripple:'rgba(58,255,110,0.3)' },
