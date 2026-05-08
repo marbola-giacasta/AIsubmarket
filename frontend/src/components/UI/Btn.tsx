@@ -98,15 +98,19 @@ export default function Btn({
       {/* Marquee: duplicate the text and scroll the pair left by 50% */}
       {marquee ? (
         <span style={{
-          display:    'flex',
-          // Scrolls from current position to -50% (showing the duplicate seamlessly)
-          animation:  disabled ? 'none' : 'marqueeScroll 5s linear infinite',
-          willChange: 'transform',
+          display:    'block',
+          overflow:   'hidden',
+          width:      '120px',   // fixed width — text scrolls inside this box
         }}>
-          {/* First copy */}
-          <span style={{ paddingRight: '32px' }}>{children}</span>
-          {/* Duplicate — appears as the first copy scrolls out of view */}
-          <span style={{ paddingRight: '32px' }}>{children}</span>
+          <span style={{
+            display:    'inline-flex',
+            animation:  disabled ? 'none' : 'marqueeScroll 3s linear infinite',
+            willChange: 'transform',
+            whiteSpace: 'nowrap',
+          }}>
+            <span style={{ paddingRight: '24px' }}>{children}</span>
+            <span style={{ paddingRight: '24px' }}>{children}</span>
+          </span>
         </span>
       ) : (
         children
