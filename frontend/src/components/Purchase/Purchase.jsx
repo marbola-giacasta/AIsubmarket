@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import * as api from '../../services/api';
 import RequestFormModal from './RequestFormModal';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import Btn from '../UI/Btn';
 
 const DOMAIN_META = {
@@ -12,6 +13,7 @@ const DOMAIN_META = {
 };
 
 export default function Purchase() {
+  const isMobile = useIsMobile(640);
   const [searchParams] = useSearchParams();
   const [domains,       setDomains]       = useState([]);
   const [domain,        setDomain]        = useState('');
@@ -224,7 +226,7 @@ const s = {
 
   ctaWrap: { marginBottom:'20px', transition:'opacity 0.2s' },
   ctaLabel: { fontFamily:'var(--font-display)', fontSize:'12px', color:'var(--muted)', letterSpacing:'1px', marginBottom:'8px' },
-  ctaRow: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2px', background:'var(--border)' },
+  ctaRow: { display:'grid', gridTemplateColumns:'1fr', gap:'2px', background:'var(--border)' },
   ctaCard: { display:'flex', gap:'14px', padding:'20px', background:'var(--surface)', border:'none', alignItems:'flex-start' },
   ctaMeta: { display:'flex', flexDirection:'column', gap:'4px', minWidth:'90px', borderRight:'1px solid var(--border)', paddingRight:'14px', flexShrink:0 },
   ctaNum: { fontFamily:'var(--font-display)', fontSize:'11px', color:'var(--muted)', letterSpacing:'1px' },
