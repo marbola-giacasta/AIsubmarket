@@ -3,7 +3,7 @@
 // @ts-nocheck suppresses type errors on this file so the build passes
 // while the rest of the codebase is already fully typed.
 const express   = require('express');
-const supabase  = require('../../lib/database');
+const supabase  = require('../../lib/database').default;
 const { requireAuth } = require('../../middleware/auth');
 const { createDnsRecord, updateDnsRecord, deleteDnsRecord, ZONE_MAP } = require('../../lib/cloudflare');
 const { sendSubdomainRequest } = require('../../lib/email');
@@ -168,4 +168,4 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-export default router;
+module.exports = router;

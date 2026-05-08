@@ -1,7 +1,4 @@
 // @ts-nocheck
-// TypeScript migration in progress — full types will be added gradually.
-// @ts-nocheck suppresses type errors on this file so the build passes
-// while the rest of the codebase is already fully typed.
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import * as api from '../../services/api';
@@ -9,9 +6,11 @@ import SubdomainCard from './SubdomainCard';
 import DNSManager from './DNSManager';
 import { useAuth } from '../../contexts/AuthContext';
 import Btn from '../UI/Btn';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const isMobile = useIsMobile(640);
   const [searchParams, setSearchParams] = useSearchParams();
   const [subdomains, setSubdomains] = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -48,24 +47,24 @@ export default function Dashboard() {
 
   if (loading) return (
     <div style={{ padding:'20px', fontFamily:'var(--font-mono)', color:'var(--muted)', fontSize:'12px' }}>
-      <span style={{ color:'var(--comment)' }}>// </span>loading<span className="cursor" />
+      // loading<span className="cursor" />
     </div>
   );
 
   return (
     <div className="fade-up">
-      {/* Header */}
-      <div style={s.header}>
+      {/* Header — stacks on mobile */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom:'24px', flexWrap:'wrap', gap:'12px' }}>
         <div>
-          <div style={s.breadcrumb}>
-            <span style={s.bc}># submarket</span>
-            <span style={s.bcsep}> &gt; </span>
-            <span style={{ ...s.bc, color:'var(--blue)' }}>dashboard</span>
-            <span style={s.bcsep}> &gt; </span>
-            <span style={{ ...s.bc, color:'var(--gold)' }}>{user?.email?.split('@')[0]}</span>
-            <span style={s.bccount}>[{subdomains.length}]</span>
+          <div style={{ display:'flex', alignItems:'center', fontFamily:'var(--font-mono)', fontSize:'11px', marginBottom:'6px', flexWrap:'wrap', gap:'0' }}>
+            <span style={{ color:'var(--muted)' }}># submarket</span>
+            <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
+            <span style={{ color:'var(--blue)' }}>dashboard</span>
+            <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
+            <span style={{ color:'var(--gold)' }}>{user?.email?.split('@')[0]}</span>
+            <span style={{ color:'var(--comment)', marginLeft:'8px' }}>[{subdomains.length}]</span>
           </div>
-          <h1 style={s.title}>MY DOMAINS</h1>
+          <h1 style={{ fontFamily:'var(--font-display)', fontSize: isMobile ? '26px' : '36px', letterSpacing:'2px' }}>MY DOMAINS</h1>
         </div>
         <Link to="/purchase">
           <Btn variant="blue">+ NEW DOMAIN</Btn>
@@ -77,19 +76,18 @@ export default function Dashboard() {
 
       {subdomains.length === 0 ? (
         <div style={s.empty}>
-          <div style={s.emptyCode}>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:'13px', lineHeight:2.2 }}>
-              <span style={{ color:'var(--green)' }}>const </span>
-              <span style={{ color:'var(--gold)' }}>myDomains</span>
-              <span style={{ color:'var(--muted)' }}> = </span>
-              <span style={{ color:'var(--orange)' }}>[]</span>
-            </div>
-            <div style={{ fontFamily:'var(--font-mono)', color:'var(--comment)', fontSize:'12px' }}>// no subdomains registered yet</div>
+          <div style={{ fontFamily:'var(--font-mono)', fontSize:'13px', lineHeight:2.2, marginBottom:'16px' }}>
+            <span style={{ color:'var(--blue)' }}>const </span>
+            <span style={{ color:'var(--gold)' }}>myDomains</span>
+            <span style={{ color:'var(--muted)' }}> = </span>
+            <span style={{ color:'var(--orange)' }}>[]</span>
+            <br />
+            <span style={{ color:'var(--comment)', fontSize:'12px' }}>// no subdomains registered yet</span>
           </div>
-          <Link to="/purchase"><Btn variant="primary"><Btn variant="primary">&#9658; PURCHASE FIRST DOMAIN</Btn>#9658; PURCHASE FIRST DOMAIN</Btn></Link>
+          <Link to="/purchase"><Btn variant="primary">&#9658; PURCHASE FIRST DOMAIN</Btn></Link>
         </div>
       ) : (
-        <div style={s.grid}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'1px', marginBottom:'40px', background:'var(--border)' }}>
           {subdomains.map((tag, i) => (
             <div key={tag.id} className={`fade-up delay-${Math.min(i+1,3)}`}>
               <SubdomainCard tag={tag} onConfigureDNS={setSelected} onDelete={handleDelete} />
@@ -98,23 +96,22 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* JSDoc info */}
       <div style={s.docs}>
-        <div style={s.docsHeader}>/**</div>
+        <div style={{ color:'var(--comment)', padding:'10px 12px 4px', fontSize:'12px' }}>/**</div>
         {[
           ['@hosting',   'Vercel, Netlify, GitHub Pages, Wix, Squarespace, VPS'],
-          ['@dns',       'A, CNAME, MX, TXT, AAAA record types supported'],
+          ['@dns',       'A, CNAME, MX, TXT, AAAA record types'],
           ['@cdn',       'Cloudflare proxy -- DDoS protection + auto HTTPS'],
-          ['@api',       'REST API available for programmatic DNS updates'],
+          ['@api',       'REST API for programmatic DNS updates'],
         ].map(([key, val]) => (
-          <div key={key} style={s.docsLine}>
+          <div key={key} style={{ padding:'2px 12px', fontSize:'12px', lineHeight:2, fontFamily:'var(--font-mono)', flexWrap:'wrap' }}>
             <span style={{ color:'var(--comment)' }}>  * </span>
-            <span style={{ color:'var(--gold)', fontFamily:'var(--font-display)', fontSize:'12px', letterSpacing:'0.5px' }}>{key}</span>
+            <span style={{ color:'var(--gold)', fontFamily:'var(--font-display)', fontSize:'11px', letterSpacing:'0.5px' }}>{key}</span>
             <span style={{ color:'var(--muted)' }}> -- </span>
-            <span style={{ color:'var(--text)' }}>{val}</span>
+            <span style={{ color:'var(--text-2, #3C3C3C)' }}>{val}</span>
           </div>
         ))}
-        <div style={s.docsFooter}>*/</div>
+        <div style={{ color:'var(--comment)', padding:'4px 12px 12px', fontSize:'12px', fontFamily:'var(--font-mono)' }}>*/</div>
       </div>
 
       {selected && (
@@ -125,22 +122,8 @@ export default function Dashboard() {
 }
 
 const s = {
-  header: { display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:'24px', flexWrap:'wrap', gap:'16px' },
-  breadcrumb: { display:'flex', alignItems:'center', fontFamily:'var(--font-mono)', fontSize:'11px', marginBottom:'6px' },
-  bc: { color:'var(--muted)' },
-  bcsep: { color:'var(--border)', padding:'0 5px' },
-  bccount: { color:'var(--comment)', marginLeft:'8px' },
-  title: { fontFamily:'var(--font-display)', fontSize:'36px', letterSpacing:'2px', color:'var(--text)' },
-
-  ok: { padding:'8px 14px', background:'rgba(58,255,110,0.08)', border:'1px solid var(--green)', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--teal)', marginBottom:'16px' },
-  err: { padding:'8px 14px', background:'rgba(192,57,43,0.07)', border:'1px solid var(--red)', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--red)', marginBottom:'16px' },
-
-  empty: { padding:'40px 24px', border:'1px dashed var(--border)', marginBottom:'32px', display:'flex', flexDirection:'column', gap:'20px', background:'var(--surface)' },
-  emptyCode: { display:'flex', flexDirection:'column', gap:'4px' },
-  grid: { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:'1px', marginBottom:'40px', background:'var(--border)' },
-
-  docs: { border:'1px solid var(--border)', background:'var(--surface)', fontFamily:'var(--font-mono)', fontSize:'12px' },
-  docsHeader: { padding:'10px 14px 4px', color:'var(--comment)' },
-  docsLine: { padding:'2px 14px', lineHeight:2 },
-  docsFooter: { padding:'4px 14px 12px', color:'var(--comment)' },
+  ok:   { padding:'8px 14px', background:'rgba(58,255,110,0.08)', border:'1px solid var(--green)', fontFamily:'var(--font-mono)', fontSize:'12px', marginBottom:'16px' },
+  err:  { padding:'8px 14px', background:'rgba(192,57,43,0.07)', border:'1px solid var(--red)', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--red)', marginBottom:'16px' },
+  empty:{ padding:'28px 20px', border:'1px dashed var(--border)', marginBottom:'32px', display:'flex', flexDirection:'column', gap:'12px', background:'var(--surface)' },
+  docs: { border:'1px solid var(--border)', background:'var(--surface)' },
 };

@@ -1,7 +1,11 @@
 // @ts-nocheck
-// TypeScript migration in progress — full types will be added gradually.
-// @ts-nocheck suppresses type errors on this file so the build passes
-// while the rest of the codebase is already fully typed.
+// ─────────────────────────────────────────────────────────────
+// LoginPage.tsx
+// Desktop: dark terminal on the left, login form on the right.
+// Mobile:  compact dark banner on top, login form below.
+//          This way the brand/style is visible on mobile too.
+// ─────────────────────────────────────────────────────────────
+
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import * as api from '../../services/api';
@@ -33,18 +37,32 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ display:'flex', minHeight:'100dvh', flexDirection:'row' }}>
+    <div style={{ display:'flex', minHeight:'100dvh', flexDirection: isMobile ? 'column' : 'row' }}>
 
-      {/* Left terminal — hidden on mobile */}
-      {!isMobile && (
+      {/* Dark panel — left on desktop, compact banner on mobile */}
+      {isMobile ? (
+        // Mobile: compact dark header strip with branding
+        <div style={s.mobileBanner}>
+          <div style={s.bannerInner}>
+            <span style={s.bannerLogo}># <span style={{ color:'var(--green)' }}>Sub</span>Market</span>
+            <span style={s.bannerTag}>// AI subdomain registry</span>
+          </div>
+          <div style={s.bannerDomains}>
+            {['open-ai.ch','open-ai.live','geminai.info','course-ai.co.uk'].map(d => (
+              <span key={d} style={s.domainPill}>{d}</span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        // Desktop: full dark terminal panel
         <div style={s.terminal}>
           <div style={s.termBar}>
             <span style={s.termTitle}>TERMINAL</span>
-            <span style={s.termConnected}>CONNECTED</span>
+            <span style={s.termConn}>CONNECTED</span>
           </div>
           <div style={s.termBody}>
-            <Line p="$"     c="#E8E8E8">whois submarket</Line>
-            <Line p=">"     c="var(--comment)">AI subdomain registry</Line>
+            <Line p="$" c="#E8E8E8">whois submarket</Line>
+            <Line p=">" c="var(--comment)">AI subdomain registry</Line>
             <Blank />
             <Line p="const" c="var(--blue)"> domains = [</Line>
             {['open-ai.ch','open-ai.live','geminai.info','course-ai.co.uk'].map(d => (
@@ -68,18 +86,21 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Right form */}
+      {/* Login form */}
       <div style={{
         ...s.formSide,
-        width: isMobile ? '100%' : 'clamp(300px, 40vw, 440px)',
         borderLeft: isMobile ? 'none' : '2px solid var(--green)',
-        borderTop:  isMobile ? '4px solid var(--green)' : 'none',
+        borderTop:  isMobile ? '2px solid var(--green)' : 'none',
+        width:      isMobile ? '100%' : 'clamp(300px, 40vw, 440px)',
+        padding:    isMobile ? '28px 20px' : 'clamp(24px,5vw,40px) clamp(20px,4vw,36px)',
       }}>
-        <div className="fade-up" style={s.formWrap}>
-          <div style={s.formHeader}>
-            <span style={s.formTitle}># SubMarket</span>
-            <span style={s.formComment}>// AI subdomain registry</span>
-          </div>
+        <div className="fade-up" style={{ width:'100%', maxWidth:'380px' }}>
+          {!isMobile && (
+            <div style={s.formHeader}>
+              <span style={s.formTitle}># SubMarket</span>
+              <span style={s.formComment}>// AI subdomain registry</span>
+            </div>
+          )}
 
           <div style={s.modeTabs}>
             <button style={{ ...s.modeTab, ...(mode==='login'    ? s.modeTabActive : {}) }} onClick={() => setMode('login')}>login.js</button>
@@ -127,18 +148,27 @@ function Line({ p, c, children }) {
 function Blank() { return <div style={{ height:'10px' }} />; }
 
 const s = {
+  // Mobile banner
+  mobileBanner: { background:'var(--surface-dark)', padding:'18px 20px 14px', borderBottom:'1px solid var(--border-dark)', flexShrink:0 },
+  bannerInner:  { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' },
+  bannerLogo:   { fontFamily:'var(--font-display)', fontSize:'18px', color:'#F8F8F8', letterSpacing:'1px' },
+  bannerTag:    { fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--comment)' },
+  bannerDomains:{ display:'flex', gap:'6px', flexWrap:'wrap' },
+  domainPill:   { fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--gold)', background:'rgba(201,147,42,0.1)', border:'1px solid rgba(201,147,42,0.25)', padding:'2px 8px' },
+
+  // Desktop terminal
   terminal: { flex:1, background:'var(--surface-dark)', display:'flex', flexDirection:'column', minWidth:0, position:'relative', overflow:'hidden' },
   termBar: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 16px', background:'var(--surface-dark2)', borderBottom:'1px solid var(--border-dark)', flexShrink:0 },
   termTitle: { fontFamily:'var(--font-display)', fontSize:'11px', color:'var(--muted)', letterSpacing:'2px' },
-  termConnected: { fontFamily:'var(--font-display)', fontSize:'10px', color:'var(--green)', border:'1px solid var(--green)', padding:'1px 8px', letterSpacing:'1px' },
+  termConn: { fontFamily:'var(--font-display)', fontSize:'10px', color:'var(--green)', border:'1px solid var(--green)', padding:'1px 8px', letterSpacing:'1px' },
   termBody: { padding:'24px 28px', flex:1, overflowY:'auto' },
   indent: { paddingLeft:'52px', fontSize:'13px', marginBottom:'3px', fontFamily:'var(--font-mono)' },
   termBgLabel: { fontFamily:'var(--font-display)', fontSize:'clamp(60px,10vw,100px)', lineHeight:0.9, color:'rgba(58,255,110,0.04)', position:'absolute', bottom:'-10px', right:'-10px', letterSpacing:'-4px', userSelect:'none', pointerEvents:'none' },
 
-  formSide: { background:'var(--surface)', display:'flex', alignItems:'center', justifyContent:'center', padding:'clamp(24px,5vw,40px) clamp(20px,4vw,36px)', flexShrink:0 },
-  formWrap: { width:'100%', maxWidth:'380px' },
+  // Form side
+  formSide: { background:'var(--surface)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 },
   formHeader: { marginBottom:'24px' },
-  formTitle: { fontFamily:'var(--font-display)', fontSize:'clamp(16px,3vw,20px)', color:'var(--text)', display:'block', marginBottom:'4px', letterSpacing:'1px' },
+  formTitle: { fontFamily:'var(--font-display)', fontSize:'20px', color:'var(--text)', display:'block', marginBottom:'4px', letterSpacing:'1px' },
   formComment: { fontFamily:'var(--font-mono)', color:'var(--comment)', fontSize:'12px' },
 
   modeTabs: { display:'flex', marginBottom:'20px', borderBottom:'2px solid var(--border)' },
@@ -147,9 +177,9 @@ const s = {
 
   form: { display:'flex', flexDirection:'column', gap:'10px' },
   field: { display:'flex', alignItems:'center', background:'var(--bg)', border:'1px solid var(--border)' },
-  fieldKey: { padding:'9px 10px', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--gold)', borderRight:'1px solid var(--border)', minWidth:'130px', whiteSpace:'nowrap', flexShrink:0 },
+  fieldKey: { padding:'10px 10px', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--gold)', borderRight:'1px solid var(--border)', minWidth:'130px', whiteSpace:'nowrap', flexShrink:0 },
   fieldEq: { padding:'0 8px', fontFamily:'var(--font-mono)', color:'var(--muted)', fontSize:'12px', flexShrink:0 },
-  fieldInput: { flex:1, padding:'9px 6px', background:'transparent', border:'none', fontFamily:'var(--font-mono)', color:'var(--orange)', fontSize:'16px', outline:'none', minWidth:0 },
+  fieldInput: { flex:1, padding:'10px 6px', background:'transparent', border:'none', fontFamily:'var(--font-mono)', color:'var(--orange)', fontSize:'16px', outline:'none', minWidth:0 },
 
   error: { padding:'8px 12px', background:'rgba(192,57,43,0.08)', border:'1px solid var(--red)', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--red)' },
   switchLine: { marginTop:'16px', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--muted)' },
