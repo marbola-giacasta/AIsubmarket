@@ -1,5 +1,23 @@
-node_modules/
-dist/
+# Environment variables — never commit these
 .env
-backend/.env
-frontend/.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build output
+frontend/dist/
+frontend/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel
