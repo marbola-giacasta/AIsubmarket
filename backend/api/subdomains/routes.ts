@@ -1,7 +1,7 @@
 // @ts-nocheck
-// ─────────────────────────────────────────────────────────────
-// backend/api/subdomains/routes.ts — complete file
-// ─────────────────────────────────────────────────────────────
+// cancel-subscription now MARKS as cancelled instead of deleting.
+// isAvailable() updated to ignore cancelled tags so the FQDN
+// becomes available for repurchase immediately.
 
 const express   = require('express');
 const supabase  = require('../../lib/database').default;
@@ -10,25 +10,24 @@ const { createDnsRecord, updateDnsRecord, deleteDnsRecord, ZONE_MAP } = require(
 const { sendSubdomainRequest } = require('../../lib/email');
 
 let stripe = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-}
+if (process.env.STRIPE_SECRET_KEY) stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const router = express.Router();
+const router           = express.Router();
 const AVAILABLE_DOMAINS = Object.keys(ZONE_MAP);
-const VALID_DNS_TYPES   = ['A', 'CNAME', 'MX', 'TXT', 'AAAA'];
+const VALID_DNS_TYPES   = ['A','CNAME','MX','TXT','AAAA'];
 const SUBDOMAIN_PRICE   = Number(process.env.SUBDOMAIN_PRICE_CENTS) || 999;
 
 function validateSubdomain(s) { return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(s); }
+
+// A tag is "available" if no active (non-cancelled) tag exists for this FQDN
 async function isAvailable(fqdn) {
-  const { data } = await supabase.from('tags').select('id').eq('fqdn', fqdn).single();
+  const { data } = await supabase.from('tags').select('id')
+    .eq('fqdn', fqdn).eq('subscription_cancelled', false).single();
   return !data;
 }
 
-// ── GET /domains ──────────────────────────────────────────────
 router.get('/domains', (_req, res) => res.json({ domains: AVAILABLE_DOMAINS }));
 
-// ── GET /check ────────────────────────────────────────────────
 router.get('/check', async (req, res, next) => {
   try {
     const { subdomain, domain } = req.query;
@@ -37,149 +36,126 @@ router.get('/check', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET / — user's registered subdomains ─────────────────────
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('tags').select('*').eq('owner_id', req.user.id).order('created_at', { ascending: false });
+    // Only show non-cancelled tags on the user's dashboard
+    const { data, error } = await supabase.from('tags').select('*')
+      .eq('owner_id', req.user.id).eq('subscription_cancelled', false)
+      .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ subdomains: data });
   } catch (err) { next(err); }
 });
 
-// ── GET /my-requests — active (non-dismissed) requests ────────
 router.get('/my-requests', requireAuth, async (req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('subdomain_requests')
-      .select('id, fqdn, subdomain, domain, use_case, status, admin_note, admin_comment, price_usd, price_chf, price_eur, price_status, messages, created_at')
-      .eq('requester_id', req.user.id)
-      .eq('dismissed', false)
+    const { data, error } = await supabase.from('subdomain_requests')
+      .select('id,fqdn,subdomain,domain,use_case,status,admin_note,admin_comment,price_usd,price_chf,price_eur,price_status,messages,created_at')
+      .eq('requester_id', req.user.id).eq('dismissed', false)
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ requests: data });
   } catch (err) { next(err); }
 });
 
-// ── GET /my-history — dismissed requests ─────────────────────
 router.get('/my-history', requireAuth, async (req, res, next) => {
   try {
-    const { data, error } = await supabase
-      .from('subdomain_requests')
-      .select('id, fqdn, use_case, status, admin_note, price_usd, price_chf, price_eur, price_status, messages, created_at')
-      .eq('requester_id', req.user.id)
-      .eq('dismissed', true)
+    const { data, error } = await supabase.from('subdomain_requests')
+      .select('id,fqdn,use_case,status,admin_note,price_usd,price_chf,price_eur,price_status,messages,created_at')
+      .eq('requester_id', req.user.id).eq('dismissed', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ requests: data });
   } catch (err) { next(err); }
 });
 
-// ── POST /requests/:id/dismiss ────────────────────────────────
-// Approved and rejected can be dismissed. Pending cannot.
 router.post('/requests/:id/dismiss', requireAuth, async (req, res, next) => {
   try {
-    const { data: request } = await supabase
-      .from('subdomain_requests').select('id, status')
-      .eq('id', req.params.id).eq('requester_id', req.user.id).single();
-    if (!request) return res.status(404).json({ error: 'Not found' });
-    if (request.status === 'pending') return res.status(400).json({ error: 'Cannot dismiss a pending request' });
+    const { data: r } = await supabase.from('subdomain_requests').select('id,status').eq('id', req.params.id).eq('requester_id', req.user.id).single();
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    if (r.status === 'pending') return res.status(400).json({ error: 'Cannot dismiss a pending request' });
     await supabase.from('subdomain_requests').update({ dismissed: true }).eq('id', req.params.id);
     res.json({ message: 'Dismissed' });
   } catch (err) { next(err); }
 });
 
-// ── DELETE /requests/:id — delete a history record permanently
 router.delete('/requests/:id', requireAuth, async (req, res, next) => {
   try {
-    const { data: r } = await supabase
-      .from('subdomain_requests').select('requester_id').eq('id', req.params.id).single();
+    const { data: r } = await supabase.from('subdomain_requests').select('requester_id').eq('id', req.params.id).single();
     if (!r || r.requester_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     await supabase.from('subdomain_requests').delete().eq('id', req.params.id);
     res.json({ message: 'Deleted' });
   } catch (err) { next(err); }
 });
 
-// ── DELETE /my-history/all — wipe all dismissed records ───────
 router.delete('/my-history/all', requireAuth, async (req, res, next) => {
   try {
-    await supabase.from('subdomain_requests').delete()
-      .eq('requester_id', req.user.id).eq('dismissed', true);
+    await supabase.from('subdomain_requests').delete().eq('requester_id', req.user.id).eq('dismissed', true);
     res.json({ message: 'History cleared' });
   } catch (err) { next(err); }
 });
 
-// ── POST /requests/:id/accept-price ──────────────────────────
 router.post('/requests/:id/accept-price', requireAuth, async (req, res, next) => {
   try {
-    const { data: request } = await supabase
-      .from('subdomain_requests').select('*').eq('id', req.params.id).eq('requester_id', req.user.id).single();
-    if (!request) return res.status(404).json({ error: 'Not found' });
-    if (request.price_status !== 'proposed') return res.status(400).json({ error: 'No active proposal' });
+    const { data: r } = await supabase.from('subdomain_requests').select('*').eq('id', req.params.id).eq('requester_id', req.user.id).single();
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    if (r.price_status !== 'proposed') return res.status(400).json({ error: 'No active proposal' });
     await supabase.from('subdomain_requests').update({ price_status: 'accepted' }).eq('id', req.params.id);
     res.json({ message: 'Price accepted' });
   } catch (err) { next(err); }
 });
 
-// ── POST /requests/:id/decline-price ─────────────────────────
 router.post('/requests/:id/decline-price', requireAuth, async (req, res, next) => {
   try {
-    const { data: request } = await supabase
-      .from('subdomain_requests').select('*').eq('id', req.params.id).eq('requester_id', req.user.id).single();
-    if (!request) return res.status(404).json({ error: 'Not found' });
-    if (request.price_status !== 'proposed') return res.status(400).json({ error: 'No active proposal' });
+    const { data: r } = await supabase.from('subdomain_requests').select('*').eq('id', req.params.id).eq('requester_id', req.user.id).single();
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    if (r.price_status !== 'proposed') return res.status(400).json({ error: 'No active proposal' });
     await supabase.from('subdomain_requests').update({ price_status: 'declined' }).eq('id', req.params.id);
     res.json({ message: 'Price declined' });
   } catch (err) { next(err); }
 });
 
-// ── POST /requests/:id/message — user sends message ──────────
-// Also un-archives the request if admin had dismissed it
 router.post('/requests/:id/message', requireAuth, async (req, res, next) => {
   try {
     const { text } = req.body;
-    if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
-    const { data: request } = await supabase
-      .from('subdomain_requests').select('requester_id, messages').eq('id', req.params.id).single();
-    if (!request || request.requester_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-    const msgs = [
-      ...(Array.isArray(request.messages) ? request.messages : []),
-      { id: Date.now().toString(), sender: 'user', text: text.trim(), sent_at: new Date().toISOString() },
-    ];
-    await supabase.from('subdomain_requests').update({
-      messages: msgs,
-      admin_archived: false, // un-archive so admin sees the new message
-    }).eq('id', req.params.id);
+    if (!text?.trim()) return res.status(400).json({ error: 'text required' });
+    const { data: r } = await supabase.from('subdomain_requests').select('requester_id,messages').eq('id', req.params.id).single();
+    if (!r || r.requester_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    const msgs = [...(Array.isArray(r.messages)?r.messages:[]), { id: Date.now().toString(), sender:'user', text: text.trim(), sent_at: new Date().toISOString() }];
+    await supabase.from('subdomain_requests').update({ messages: msgs, admin_archived: false }).eq('id', req.params.id);
     res.json({ messages: msgs });
   } catch (err) { next(err); }
 });
 
-// ── GET /requests/:id/messages — fetch thread ────────────────
 router.get('/requests/:id/messages', requireAuth, async (req, res, next) => {
   try {
-    const { data: request } = await supabase
-      .from('subdomain_requests').select('messages, requester_id').eq('id', req.params.id).single();
-    if (!request || request.requester_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-    res.json({ messages: request.messages || [] });
+    const { data: r } = await supabase.from('subdomain_requests').select('messages,requester_id').eq('id', req.params.id).single();
+    if (!r || r.requester_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+    res.json({ messages: r.messages || [] });
   } catch (err) { next(err); }
 });
 
-// ── POST /:id/cancel-subscription ────────────────────────────
+// CHANGED: mark as cancelled instead of deleting — tag stays in DB
+// so admin can see the history in subdomains.js
 router.post('/:id/cancel-subscription', requireAuth, async (req, res, next) => {
   try {
-    const { data: tag } = await supabase
-      .from('tags').select('*').eq('id', req.params.id).eq('owner_id', req.user.id).single();
+    const { data: tag } = await supabase.from('tags').select('*').eq('id', req.params.id).eq('owner_id', req.user.id).single();
     if (!tag) return res.status(404).json({ error: 'Subdomain not found' });
+    // Remove Cloudflare DNS if configured
     if (tag.dns_record_id) {
       try { await deleteDnsRecord({ domain: tag.domain, recordId: tag.dns_record_id }); }
-      catch (e) { console.warn('CF DNS delete warning:', e.message); }
+      catch (e) { console.warn('CF delete warning:', e.message); }
     }
-    await supabase.from('tags').delete().eq('id', req.params.id);
-    res.json({ message: `${tag.fqdn} released` });
+    // Mark cancelled — do NOT delete so admin history is preserved
+    await supabase.from('tags').update({
+      subscription_cancelled: true,
+      subscription_cancel_date: new Date().toISOString(),
+      dns_record_id: null, dns_type: null, dns_value: null, dns_proxied: 0,
+    }).eq('id', req.params.id);
+    res.json({ message: `${tag.fqdn} renewal cancelled. It will remain visible in your history.` });
   } catch (err) { next(err); }
 });
 
-// ── POST /purchase ────────────────────────────────────────────
 router.post('/purchase', requireAuth, async (req, res, next) => {
   try {
     const { subdomain, domain } = req.body;
@@ -187,14 +163,12 @@ router.post('/purchase', requireAuth, async (req, res, next) => {
     if (!AVAILABLE_DOMAINS.includes(domain) || !validateSubdomain(subdomain)) return res.status(400).json({ error: 'Invalid subdomain' });
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
-    const { data: tag, error } = await supabase.from('tags')
-      .insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
+    const { data: tag, error } = await supabase.from('tags').insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
     if (error) throw error;
     res.status(201).json({ subdomain: tag });
   } catch (err) { next(err); }
 });
 
-// ── POST /request ─────────────────────────────────────────────
 router.post('/request', requireAuth, async (req, res, next) => {
   try {
     const { subdomain, domain, name, useCase, message } = req.body;
@@ -203,7 +177,7 @@ router.post('/request', requireAuth, async (req, res, next) => {
     const fqdn = `${subdomain}.${domain}`;
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
     const { data: request, error: dbErr } = await supabase.from('subdomain_requests')
-      .insert({ subdomain, domain, fqdn, requester_id: req.user.id, requester_email: req.user.email, name, use_case: useCase, message: message || null, status: 'pending' })
+      .insert({ subdomain, domain, fqdn, requester_id: req.user.id, requester_email: req.user.email, name, use_case: useCase, message: message||null, status:'pending' })
       .select('*').single();
     if (dbErr) throw dbErr;
     await sendSubdomainRequest({ name, email: req.user.email, subdomain, domain, fqdn, useCase, message });
@@ -211,7 +185,6 @@ router.post('/request', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── POST /stripe-session ──────────────────────────────────────
 router.post('/stripe-session', requireAuth, async (req, res, next) => {
   try {
     if (!stripe) return res.status(503).json({ error: 'Stripe not configured' });
@@ -222,18 +195,15 @@ router.post('/stripe-session', requireAuth, async (req, res, next) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{ price_data: { currency: 'usd', product_data: { name: `Subdomain: ${fqdn}` }, unit_amount: SUBDOMAIN_PRICE }, quantity: 1 }],
-      mode: 'payment',
-      metadata: { subdomain, domain, fqdn, user_id: req.user.id },
+      line_items: [{ price_data: { currency:'usd', product_data: { name:`Subdomain: ${fqdn}` }, unit_amount: SUBDOMAIN_PRICE }, quantity:1 }],
+      mode: 'payment', metadata: { subdomain, domain, fqdn, user_id: req.user.id },
       success_url: `${frontendUrl}/dashboard?stripe=success&subdomain=${subdomain}&domain=${domain}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${frontendUrl}/purchase?stripe=cancelled`,
-      customer_email: req.user.email,
+      cancel_url:  `${frontendUrl}/purchase?stripe=cancelled`, customer_email: req.user.email,
     });
     res.json({ url: session.url, sessionId: session.id });
   } catch (err) { next(err); }
 });
 
-// ── POST /stripe-success ──────────────────────────────────────
 router.post('/stripe-success', requireAuth, async (req, res, next) => {
   try {
     if (!stripe) return res.status(503).json({ error: 'Stripe not configured' });
@@ -243,53 +213,45 @@ router.post('/stripe-success', requireAuth, async (req, res, next) => {
     const { subdomain, domain, fqdn, user_id } = session.metadata;
     if (user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
     if (!(await isAvailable(fqdn))) return res.status(409).json({ error: `${fqdn} is already taken` });
-    const { data: tag, error } = await supabase.from('tags')
-      .insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
+    const { data: tag, error } = await supabase.from('tags').insert({ subdomain, domain, fqdn, owner_id: req.user.id }).select('*').single();
     if (error) throw error;
     res.status(201).json({ subdomain: tag });
   } catch (err) { next(err); }
 });
 
-// ── PUT /:id/dns ──────────────────────────────────────────────
 router.put('/:id/dns', requireAuth, async (req, res, next) => {
   try {
-    const { dns_type, dns_value, dns_proxied = false, dns_ttl = 3600 } = req.body;
-    if (!dns_type || !dns_value) return res.status(400).json({ error: 'dns_type and dns_value required' });
+    const { dns_type, dns_value, dns_proxied=false, dns_ttl=3600 } = req.body;
+    if (!dns_type||!dns_value) return res.status(400).json({ error: 'dns_type and dns_value required' });
     if (!VALID_DNS_TYPES.includes(dns_type)) return res.status(400).json({ error: 'Invalid dns_type' });
     const { data: tag } = await supabase.from('tags').select('*').eq('id', req.params.id).eq('owner_id', req.user.id).single();
     if (!tag) return res.status(404).json({ error: 'Subdomain not found' });
     let recordId = tag.dns_record_id;
-    if (recordId) { await updateDnsRecord({ domain: tag.domain, recordId, type: dns_type, value: dns_value, proxied: dns_proxied, ttl: dns_ttl }); }
-    else          { recordId = await createDnsRecord({ domain: tag.domain, subdomain: tag.subdomain, type: dns_type, value: dns_value, proxied: dns_proxied, ttl: dns_ttl }); }
-    const { data: updated } = await supabase.from('tags')
-      .update({ dns_record_id: recordId, dns_type, dns_value, dns_proxied: dns_proxied ? 1 : 0, dns_ttl, dns_updated_at: new Date().toISOString() })
-      .eq('id', req.params.id).select('*').single();
+    if (recordId) { await updateDnsRecord({ domain:tag.domain, recordId, type:dns_type, value:dns_value, proxied:dns_proxied, ttl:dns_ttl }); }
+    else          { recordId = await createDnsRecord({ domain:tag.domain, subdomain:tag.subdomain, type:dns_type, value:dns_value, proxied:dns_proxied, ttl:dns_ttl }); }
+    const { data: updated } = await supabase.from('tags').update({ dns_record_id:recordId, dns_type, dns_value, dns_proxied:dns_proxied?1:0, dns_ttl, dns_updated_at:new Date().toISOString() }).eq('id', req.params.id).select('*').single();
     res.json({ subdomain: updated });
   } catch (err) { next(err); }
 });
 
-// ── DELETE /:id/dns ───────────────────────────────────────────
 router.delete('/:id/dns', requireAuth, async (req, res, next) => {
   try {
     const { data: tag } = await supabase.from('tags').select('*').eq('id', req.params.id).eq('owner_id', req.user.id).single();
-    if (!tag || !tag.dns_record_id) return res.status(404).json({ error: 'Not found' });
-    await deleteDnsRecord({ domain: tag.domain, recordId: tag.dns_record_id });
-    await supabase.from('tags').update({ dns_record_id: null, dns_type: null, dns_value: null, dns_proxied: 0 }).eq('id', req.params.id);
+    if (!tag||!tag.dns_record_id) return res.status(404).json({ error: 'Not found' });
+    await deleteDnsRecord({ domain:tag.domain, recordId:tag.dns_record_id });
+    await supabase.from('tags').update({ dns_record_id:null, dns_type:null, dns_value:null, dns_proxied:0 }).eq('id', req.params.id);
     res.json({ message: 'DNS record deleted' });
   } catch (err) { next(err); }
 });
 
-// ── DELETE /:id ───────────────────────────────────────────────
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const { data: tag } = await supabase.from('tags').select('*').eq('id', req.params.id).eq('owner_id', req.user.id).single();
     if (!tag) return res.status(404).json({ error: 'Subdomain not found' });
-    if (tag.dns_record_id) {
-      try { await deleteDnsRecord({ domain: tag.domain, recordId: tag.dns_record_id }); } catch (e) {}
-    }
+    if (tag.dns_record_id) { try { await deleteDnsRecord({ domain:tag.domain, recordId:tag.dns_record_id }); } catch(e){} }
     await supabase.from('tags').delete().eq('id', req.params.id);
     res.json({ message: 'Subdomain released' });
   } catch (err) { next(err); }
 });
 
-export default router;
+module.exports = router;
