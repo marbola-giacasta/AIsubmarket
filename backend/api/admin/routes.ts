@@ -1,7 +1,4 @@
 // @ts-nocheck
-// admin_archived: graceful fallback — if column doesn't exist yet
-// (patch not run), we show all non-pending as the main list.
-
 import { Router } from 'express';
 import supabase from '../../lib/database';
 import { requireAuth } from '../../middleware/auth';
@@ -15,90 +12,92 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
-// GET main requests — non-archived
-// Graceful: if admin_archived column doesn't exist, return all pending
+// ── GET /requests — main view (non-archived) ──────────────────
+// For approved requests, also checks whether the tag still exists
+// so the frontend can show "renewal cancelled" if the user deleted it.
 router.get('/requests', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    // Try with admin_archived filter first
-    let { data, error } = await supabase
+    let { data: requests, error } = await supabase
       .from('subdomain_requests')
       .select('*')
       .eq('admin_archived', false)
       .order('created_at', { ascending: false });
 
-    // If column doesn't exist yet, fall back to all requests
     if (error && error.message?.includes('admin_archived')) {
-      const fallback = await supabase
-        .from('subdomain_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-      data  = fallback.data;
-      error = fallback.error;
+      const fb = await supabase.from('subdomain_requests').select('*').order('created_at', { ascending: false });
+      requests = fb.data; error = fb.error;
+    }
+    if (error) throw error;
+
+    // For approved requests, check which tags are still alive
+    const approvedFqdns = (requests || []).filter(r => r.status === 'approved').map(r => r.fqdn);
+    let activeFqdns = new Set();
+    if (approvedFqdns.length > 0) {
+      const { data: liveTags } = await supabase
+        .from('tags')
+        .select('fqdn, dns_type, dns_value, subscription_cancelled')
+        .in('fqdn', approvedFqdns);
+      (liveTags || []).forEach(t => activeFqdns.set(t.fqdn, t));
     }
 
-    if (error) throw error;
-    res.json({ requests: data });
+    // Attach tag_status to each approved request so the frontend can show badges
+    const enriched = (requests || []).map(r => {
+      if (r.status !== 'approved') return r;
+      const tag = activeFqdns.get(r.fqdn);
+      return {
+        ...r,
+        tag_exists:         !!tag,
+        tag_cancelled:      tag ? !!tag.subscription_cancelled : false,
+        tag_has_dns:        tag ? !!(tag.dns_type && tag.dns_value) : false,
+      };
+    });
+
+    res.json({ requests: enriched });
   } catch (err) { next(err); }
 });
 
-// GET history — archived requests
+// ── GET /requests/history ─────────────────────────────────────
 router.get('/requests/history', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     let { data, error } = await supabase
-      .from('subdomain_requests')
-      .select('*')
-      .eq('admin_archived', true)
-      .order('created_at', { ascending: false });
-
-    if (error && error.message?.includes('admin_archived')) {
-      // Column not created yet — return empty history
-      return res.json({ requests: [] });
-    }
-
+      .from('subdomain_requests').select('*')
+      .eq('admin_archived', true).order('created_at', { ascending: false });
+    if (error && error.message?.includes('admin_archived')) return res.json({ requests: [] });
     if (error) throw error;
     res.json({ requests: data });
   } catch (err) { next(err); }
 });
 
-// POST archive
-router.post('/requests/:id/archive', requireAuth, requireAdmin, async (req, res, next) => {
-  try {
-    await supabase.from('subdomain_requests').update({ admin_archived: true }).eq('id', req.params.id);
-    res.json({ message: 'Archived' });
-  } catch (err) { next(err); }
-});
-
-// DELETE single from history
-router.delete('/requests/:id', requireAuth, requireAdmin, async (req, res, next) => {
-  try {
-    await supabase.from('subdomain_requests').delete().eq('id', req.params.id);
-    res.json({ message: 'Deleted' });
-  } catch (err) { next(err); }
-});
-
-// DELETE all history
-router.delete('/requests/history/all', requireAuth, requireAdmin, async (_req, res, next) => {
-  try {
-    await supabase.from('subdomain_requests').delete().eq('admin_archived', true);
-    res.json({ message: 'History cleared' });
-  } catch (err) { next(err); }
-});
-
+// ── GET /subdomains — two separate queries, no FK join needed ─
 router.get('/subdomains', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    const { data, error } = await supabase.from('tags').select('*, users(email)').order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json({ subdomains: (data ?? []).map(t => ({ ...t, owner_email: t.users?.email ?? null, users: undefined })) });
+    // Fetch tags and users separately — avoids needing a FK defined in Supabase
+    const [{ data: tags, error: tagsErr }, { data: users, error: usersErr }] = await Promise.all([
+      supabase.from('tags').select('*').order('created_at', { ascending: false }),
+      supabase.from('users').select('id, email'),
+    ]);
+    if (tagsErr) throw tagsErr;
+    if (usersErr) throw usersErr;
+
+    // Build a lookup map so we can attach owner_email without N+1 queries
+    const userMap = Object.fromEntries((users || []).map(u => [u.id, u.email]));
+    const subdomains = (tags || []).map(t => ({
+      ...t,
+      owner_email: userMap[t.owner_id] || null,
+    }));
+    res.json({ subdomains });
   } catch (err) { next(err); }
 });
 
+// ── GET /users ────────────────────────────────────────────────
 router.get('/users', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    const { data: users, error } = await supabase.from('users').select('id, email, is_admin, created_at').order('created_at', { ascending: false });
+    const { data: users, error } = await supabase
+      .from('users').select('id, email, is_admin, created_at').order('created_at', { ascending: false });
     if (error) throw error;
     const usersWithCounts = await Promise.all(
       (users ?? []).map(async u => {
-        const { count } = await supabase.from('tags').select('*', { count: 'exact', head: true }).eq('owner_id', u.id);
+        const { count } = await supabase.from('tags').select('*', { count:'exact', head:true }).eq('owner_id', u.id);
         return { ...u, domain_count: count ?? 0 };
       })
     );
@@ -106,6 +105,31 @@ router.get('/users', requireAuth, requireAdmin, async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── POST archive ──────────────────────────────────────────────
+router.post('/requests/:id/archive', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await supabase.from('subdomain_requests').update({ admin_archived: true }).eq('id', req.params.id);
+    res.json({ message: 'Archived' });
+  } catch (err) { next(err); }
+});
+
+// ── DELETE single history record ──────────────────────────────
+router.delete('/requests/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await supabase.from('subdomain_requests').delete().eq('id', req.params.id);
+    res.json({ message: 'Deleted' });
+  } catch (err) { next(err); }
+});
+
+// ── DELETE all history ────────────────────────────────────────
+router.delete('/requests/history/all', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    await supabase.from('subdomain_requests').delete().eq('admin_archived', true);
+    res.json({ message: 'History cleared' });
+  } catch (err) { next(err); }
+});
+
+// ── POST comment ──────────────────────────────────────────────
 router.post('/requests/:id/comment', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const admin_comment = req.body?.admin_comment?.trim();
@@ -115,6 +139,7 @@ router.post('/requests/:id/comment', requireAuth, requireAdmin, async (req, res,
   } catch (err) { next(err); }
 });
 
+// ── POST propose-price ────────────────────────────────────────
 router.post('/requests/:id/propose-price', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { price_usd, price_chf, price_eur } = req.body;
@@ -131,6 +156,7 @@ router.post('/requests/:id/propose-price', requireAuth, requireAdmin, async (req
   } catch (err) { next(err); }
 });
 
+// ── POST approve ──────────────────────────────────────────────
 router.post('/requests/:id/approve', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const admin_note = req.body?.admin_note?.trim() || null;
@@ -155,6 +181,7 @@ router.post('/requests/:id/approve', requireAuth, requireAdmin, async (req, res,
   } catch (err) { next(err); }
 });
 
+// ── POST reject ───────────────────────────────────────────────
 router.post('/requests/:id/reject', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const admin_note = req.body?.admin_note?.trim() || null;
@@ -170,6 +197,7 @@ router.post('/subdomains/:id/cancel-subscription', requireAuth, requireAdmin, as
   } catch (err) { next(err); }
 });
 
+// ── Messages ──────────────────────────────────────────────────
 router.get('/requests/:id/messages', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { data: request } = await supabase.from('subdomain_requests').select('messages').eq('id', req.params.id).single();
@@ -191,6 +219,7 @@ router.post('/requests/:id/message', requireAuth, requireAdmin, async (req, res,
   } catch (err) { next(err); }
 });
 
+// ── Root domains ──────────────────────────────────────────────
 router.get('/root-domains', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const { data, error } = await supabase.from('root_domains').select('*').order('created_at', { ascending: true });
@@ -202,7 +231,7 @@ router.get('/root-domains', requireAuth, requireAdmin, async (_req, res, next) =
 router.post('/root-domains', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { domain, zone_id, description, active = true } = req.body;
-    if (!domain || !zone_id) return res.status(400).json({ error: 'domain and zone_id are required' });
+    if (!domain || !zone_id) return res.status(400).json({ error: 'domain and zone_id required' });
     const { data, error } = await supabase.from('root_domains').insert({ domain, zone_id, description: description || null, active }).select('*').single();
     if (error) { if (error.code === '23505') return res.status(409).json({ error: `${domain} already exists` }); throw error; }
     res.status(201).json({ domain: data });
@@ -226,7 +255,7 @@ router.delete('/root-domains/:id', requireAuth, requireAdmin, async (req, res, n
   try {
     const { data: dom } = await supabase.from('root_domains').select('domain').eq('id', req.params.id).single();
     if (!dom) return res.status(404).json({ error: 'Not found' });
-    const { count } = await supabase.from('tags').select('*', { count: 'exact', head: true }).eq('domain', dom.domain);
+    const { count } = await supabase.from('tags').select('*', { count:'exact', head:true }).eq('domain', dom.domain);
     if (count && count > 0) return res.status(409).json({ error: `Cannot delete: ${count} subdomain(s) on ${dom.domain}` });
     await supabase.from('root_domains').delete().eq('id', req.params.id);
     res.json({ message: `${dom.domain} removed` });

@@ -1,7 +1,10 @@
 // @ts-nocheck
-// Added: X button to archive resolved requests to history tab.
-// Pending requests cannot be archived — only approved/rejected.
-// Admin can message on all requests (pending and resolved).
+// ─────────────────────────────────────────────────────────────
+// AdminRequests.tsx
+// New: approved cards now show inline status tags based on
+// tag_exists, tag_cancelled, tag_has_dns fields returned by
+// the enriched backend response.
+// ─────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Btn from '../UI/Btn';
@@ -25,6 +28,25 @@ function buildMessages(r) {
     msgs.unshift({ id:'legacy', sender:'admin', text: r.admin_comment, sent_at: r.created_at });
   }
   return msgs;
+}
+
+// Returns an array of small status tags to show on approved cards
+function approvedTags(r) {
+  if (r.status !== 'approved') return [];
+  const tags = [];
+  if (!r.tag_exists) {
+    tags.push({ label:'RENEWAL CANCELLED', color:'var(--muted)', bg:'rgba(100,100,100,0.15)' });
+  } else {
+    if (r.tag_cancelled) {
+      tags.push({ label:'CANCEL PENDING', color:'var(--orange)', bg:'rgba(200,75,47,0.1)' });
+    }
+    if (!r.tag_has_dns) {
+      tags.push({ label:'NO DNS', color:'var(--red)', bg:'rgba(192,57,43,0.1)' });
+    } else {
+      tags.push({ label:'DNS OK', color:'var(--comment)', bg:'rgba(74,124,63,0.1)' });
+    }
+  }
+  return tags;
 }
 
 export default function AdminRequests() {
@@ -69,15 +91,9 @@ export default function AdminRequests() {
 
   return (
     <div className="fade-up">
-      <div style={s.header}>
-        <div>
-          <p style={s.eyebrow}>// admin &gt; requests.js</p>
-          <h1 style={s.title}>SUBDOMAIN REQUESTS</h1>
-        </div>
-        <div style={s.stats}>
-          <Stat label="PENDING"  value={pending.length}  color="var(--gold)" />
-          <Stat label="RESOLVED" value={resolved.length} color="var(--comment)" />
-        </div>
+      <div style={s.statsRow}>
+        <Stat label="PENDING"  value={pending.length}  color="var(--gold)" />
+        <Stat label="RESOLVED" value={resolved.length} color="var(--comment)" />
       </div>
 
       {msg   && <div style={s.ok}>OK -- {msg}</div>}
@@ -91,7 +107,7 @@ export default function AdminRequests() {
 
       {resolved.length > 0 && (
         <>
-          <SectionHead label="RESOLVED — click X to move to history" count={resolved.length} top />
+          <SectionHead label="RESOLVED — × to archive" count={resolved.length} top />
           <div style={s.grid}>{resolved.map(r => <RequestCard key={r.id} request={r} resolved onArchive={handleArchive} />)}</div>
         </>
       )}
@@ -109,16 +125,25 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
   const statusColor = r.status==='approved' ? 'var(--comment)' : r.status==='rejected' ? 'var(--red)' : 'var(--gold)';
   const priceLabel  = r.price_status==='proposed' ? 'PRICE SENT' : r.price_status==='accepted' ? 'ACCEPTED' : r.price_status==='declined' ? 'DECLINED' : null;
   const messages    = buildMessages(r);
+  const aTags       = approvedTags(r); // subscription/DNS status tags
 
   return (
     <div style={{ ...s.card, borderTopColor: statusColor }}>
-      {/* Card header with X archive button */}
       <div style={s.cardHead}>
         <span style={s.fqdn}>{r.fqdn}</span>
-        <div style={{ display:'flex', gap:'6px', alignItems:'center', flexWrap:'wrap' }}>
-          {priceLabel && <span style={{ fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 8px', background:'rgba(26,92,255,0.15)', color:'var(--blue)', letterSpacing:'1px' }}>{priceLabel}</span>}
-          <span style={{ ...s.statusChip, background: statusColor, color: r.status==='pending' ? '#0A0A0A' : '#F8F8F8' }}>{r.status.toUpperCase()}</span>
-          {/* X only on resolved cards — moves to history */}
+        <div style={{ display:'flex', gap:'5px', alignItems:'center', flexWrap:'wrap' }}>
+          {priceLabel && <span style={{ fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 7px', background:'rgba(26,92,255,0.15)', color:'var(--blue)', letterSpacing:'1px' }}>{priceLabel}</span>}
+
+          {/* Subscription / DNS status tags on approved cards */}
+          {aTags.map((t, i) => (
+            <span key={i} style={{ fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 7px', background: t.bg, color: t.color, letterSpacing:'1px', border:`1px solid ${t.color}` }}>
+              {t.label}
+            </span>
+          ))}
+
+          <span style={{ ...s.statusChip, background: statusColor, color: r.status==='pending' ? '#0A0A0A' : '#F8F8F8' }}>
+            {r.status.toUpperCase()}
+          </span>
           {resolved && (
             <button onClick={() => onArchive(r.id)} title="Move to history" style={s.archiveBtn}>×</button>
           )}
@@ -133,24 +158,23 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
         <Row k="submitted" v={new Date(r.created_at).toLocaleString('en-GB')} />
 
         {(r.price_usd || r.price_chf || r.price_eur) && (
-          <div style={s.priceRow}>
+          <div style={s.infoBox}>
             <span style={{ color:'var(--blue)', fontSize:'10px', fontFamily:'var(--font-display)', letterSpacing:'0.5px' }}>// proposed price:</span>
             <span style={{ fontFamily:'var(--font-mono)', fontSize:'12px' }}>
-              {[r.price_usd && `$${r.price_usd}`, r.price_chf && `${r.price_chf} CHF`, r.price_eur && `${r.price_eur} EUR`].filter(Boolean).join(' / ')}/mo
-              {r.price_status==='accepted' && <span style={{ color:'var(--comment)', marginLeft:'8px' }}>✓ accepted</span>}
-              {r.price_status==='declined'  && <span style={{ color:'var(--red)',     marginLeft:'8px' }}>✗ declined</span>}
+              {[r.price_usd && `$${r.price_usd} USD`, r.price_chf && `${r.price_chf} CHF`, r.price_eur && `${r.price_eur} EUR`].filter(Boolean).join(' / ')}/mo
+              {r.price_status === 'accepted' && <span style={{ color:'var(--comment)', marginLeft:'8px' }}>✓ accepted</span>}
+              {r.price_status === 'declined'  && <span style={{ color:'var(--red)', marginLeft:'8px' }}>✗ declined</span>}
             </span>
           </div>
         )}
 
         {r.admin_note && (
-          <div style={s.noteBox}>
+          <div style={s.infoBox}>
             <span style={{ color:'var(--comment)', fontSize:'10px' }}>// decision note:</span>
             <span style={{ fontFamily:'var(--font-mono)', fontSize:'12px', lineHeight:1.5 }}>{r.admin_note}</span>
           </div>
         )}
 
-        {/* Chat carousel — admin can always send */}
         <MessageCarousel
           requestId={r.id}
           initialMessages={messages}
@@ -160,7 +184,6 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
         />
       </div>
 
-      {/* Action area — only for pending */}
       {!resolved && (
         <div style={s.actionArea}>
           <div style={s.tabRow}>
@@ -172,7 +195,7 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
             ))}
           </div>
 
-          {tab==='price' && (
+          {tab === 'price' && (
             <div style={s.tabContent}>
               <span style={s.tabHint}>// fill at least one currency</span>
               <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
@@ -189,7 +212,7 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
             </div>
           )}
 
-          {tab==='decide' && (
+          {tab === 'decide' && (
             <div style={s.tabContent}>
               <span style={s.tabHint}>// optional note to user</span>
               <textarea value={note} onChange={e => setNote(e.target.value)}
@@ -202,7 +225,7 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
             </div>
           )}
 
-          {tab==='chat' && (
+          {tab === 'chat' && (
             <div style={s.tabContent}>
               <span style={s.tabHint}>// use the conversation box above to message the user</span>
             </div>
@@ -216,7 +239,7 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, onArchiv
 function PriceField({ label, value, onChange }) {
   return (
     <div style={{ display:'flex', alignItems:'center', background:'var(--surface)', border:'1px solid var(--border)', flex:1 }}>
-      <span style={{ fontFamily:'var(--font-display)', fontSize:'10px', color:'var(--gold)', padding:'6px 8px', borderRight:'1px solid var(--border)', whiteSpace:'nowrap', letterSpacing:'0.5px' }}>{label}</span>
+      <span style={{ fontFamily:'var(--font-display)', fontSize:'10px', color:'var(--gold)', padding:'6px 8px', borderRight:'1px solid var(--border)', whiteSpace:'nowrap' }}>{label}</span>
       <input type="number" value={value} onChange={e => onChange(e.target.value)} placeholder="0.00"
         style={{ flex:1, padding:'6px 8px', background:'transparent', border:'none', fontFamily:'var(--font-mono)', color:'var(--orange)', fontSize:'12px', outline:'none', width:'60px' }} />
     </div>
@@ -250,10 +273,7 @@ function SectionHead({ label, count, top=false }) {
 
 const s = {
   loading:    { fontFamily:'var(--font-mono)', color:'var(--muted)', fontSize:'13px', padding:'20px 0' },
-  header:     { display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'28px', flexWrap:'wrap', gap:'16px' },
-  eyebrow:    { fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--comment)', marginBottom:'6px' },
-  title:      { fontFamily:'var(--font-display)', fontSize:'clamp(24px,4vw,36px)', letterSpacing:'2px' },
-  stats:      { display:'flex', gap:'1px', background:'var(--border)' },
+  statsRow:   { display:'flex', gap:'1px', background:'var(--border)', marginBottom:'20px' },
   stat:       { display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 20px', background:'var(--surface)', gap:'3px' },
   statValue:  { fontFamily:'var(--font-display)', fontSize:'28px', lineHeight:1 },
   statLabel:  { fontFamily:'var(--font-display)', fontSize:'9px', color:'var(--muted)', letterSpacing:'1.5px' },
@@ -271,8 +291,7 @@ const s = {
   rowKey:     { fontFamily:'var(--font-display)', color:'var(--gold)', minWidth:'90px', fontSize:'11px', letterSpacing:'0.3px', flexShrink:0 },
   rowEq:      { fontFamily:'var(--font-mono)', color:'var(--muted)', padding:'0 8px', flexShrink:0 },
   rowVal:     { fontFamily:'var(--font-mono)', color:'var(--text)', wordBreak:'break-all', fontSize:'12px' },
-  priceRow:   { display:'flex', flexDirection:'column', gap:'3px', padding:'7px 9px', background:'var(--bg-2)', border:'1px solid var(--border)' },
-  noteBox:    { display:'flex', flexDirection:'column', gap:'3px', padding:'7px 9px', background:'var(--bg-2)', border:'1px solid var(--border)' },
+  infoBox:    { display:'flex', flexDirection:'column', gap:'3px', padding:'7px 9px', background:'var(--bg-2)', border:'1px solid var(--border)' },
   actionArea: { borderTop:'1px solid var(--border)', background:'var(--bg)' },
   tabRow:     { display:'flex', borderBottom:'1px solid var(--border)' },
   actionTab:  { flex:1, padding:'7px 6px', background:'transparent', border:'none', borderBottom:'2px solid transparent', fontFamily:'var(--font-display)', color:'var(--muted)', fontSize:'9px', letterSpacing:'0.5px', cursor:'pointer', marginBottom:'-1px', transition:'all 0.1s' },
