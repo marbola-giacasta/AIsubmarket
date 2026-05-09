@@ -1,18 +1,16 @@
 // @ts-nocheck
-// Added: auto-poll every 20s so price proposals, approvals etc
-// update without the user switching tabs manually.
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import * as api from '../../services/api';
 import SubdomainCard from './SubdomainCard';
 import DNSManager from './DNSManager';
 import MyRequests from './MyRequests';
+import Layout from '../Layout/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import Btn from '../UI/Btn';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
-const POLL_MS = 20000; // refresh every 20 seconds silently
+const POLL_MS = 20000;
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -29,17 +27,11 @@ export default function Dashboard() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [subRes, reqRes] = await Promise.all([
-        api.getSubdomains(),
-        api.getMyRequests(),
-      ]);
+      const [subRes, reqRes] = await Promise.all([api.getSubdomains(), api.getMyRequests()]);
       setSubdomains(subRes.subdomains);
       setMyRequests(reqRes.requests);
-    } catch (err) {
-      if (!silent) setError(err.message);
-    } finally {
-      if (!silent) setLoading(false);
-    }
+    } catch (err) { if (!silent) setError(err.message); }
+    finally { if (!silent) setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -56,7 +48,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
-    // Start polling — silent refresh so there's no loading flash
     pollRef.current = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(pollRef.current);
   }, [load]);
@@ -75,21 +66,6 @@ export default function Dashboard() {
 
   return (
     <div className="fade-up">
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom:'24px', flexWrap:'wrap', gap:'12px' }}>
-        <div>
-          <div style={{ display:'flex', alignItems:'center', fontFamily:'var(--font-mono)', fontSize:'11px', marginBottom:'6px', flexWrap:'wrap' }}>
-            <span style={{ color:'var(--muted)' }}># submarket</span>
-            <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
-            <span style={{ color:'var(--blue)' }}>dashboard</span>
-            <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
-            <span style={{ color:'var(--gold)' }}>{user?.email?.split('@')[0]}</span>
-            <span style={{ color:'var(--comment)', marginLeft:'8px' }}>[{subdomains.length}]</span>
-          </div>
-          <h1 style={{ fontFamily:'var(--font-display)', fontSize: isMobile ? '26px' : '36px', letterSpacing:'2px' }}>MY DOMAINS</h1>
-        </div>
-        <Link to="/purchase"><Btn variant="blue">+ NEW DOMAIN</Btn></Link>
-      </div>
-
       {stripeMsg && <div style={s.ok}>OK -- payment confirmed -- <strong>{stripeMsg}</strong> registered</div>}
       {error     && <div style={s.err}>ERR -- {error}</div>}
 
@@ -137,6 +113,26 @@ export default function Dashboard() {
       {selected && (
         <DNSManager tag={selected} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); load(true); }} />
       )}
+    </div>
+  );
+}
+
+// PageHeader component used in App.tsx to pass into Layout
+export function DashboardHeader({ subdomainCount, userEmail, isMobile }) {
+  return (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
+      <div>
+        <div style={{ display:'flex', alignItems:'center', fontFamily:'var(--font-mono)', fontSize:'11px', flexWrap:'wrap', gap:'0', marginBottom:'4px' }}>
+          <span style={{ color:'var(--muted)' }}># submarket</span>
+          <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
+          <span style={{ color:'var(--blue)' }}>dashboard</span>
+          <span style={{ color:'var(--border)', padding:'0 5px' }}> &gt; </span>
+          <span style={{ color:'var(--gold)' }}>{userEmail?.split('@')[0]}</span>
+          <span style={{ color:'var(--comment)', marginLeft:'8px' }}>[{subdomainCount}]</span>
+        </div>
+        <h1 style={{ fontFamily:'var(--font-display)', fontSize: isMobile ? '20px' : '28px', letterSpacing:'2px', lineHeight:1 }}>MY DOMAINS</h1>
+      </div>
+      <Link to="/purchase"><Btn variant="blue">+ NEW DOMAIN</Btn></Link>
     </div>
   );
 }

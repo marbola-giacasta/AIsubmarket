@@ -1,10 +1,13 @@
 // @ts-nocheck
+// Renamed tabs: registered.js → subdomains.js, domains.js → root_domains.js
+// Added pageHeader slot for second sticky sub-header
+
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
-export default function AdminLayout({ children }) {
+export default function AdminLayout({ children, pageHeader = null }) {
   const { user, logoutUser } = useAuth();
   const { pathname }         = useLocation();
   const isMobile             = useIsMobile(768);
@@ -12,14 +15,15 @@ export default function AdminLayout({ children }) {
 
   const tabs = [
     { to:'/admin',              label:'requests.js' },
-    { to:'/admin/registered',   label:'registered.js' },
-    { to:'/admin/root-domains', label:'domains.js' },
+    { to:'/admin/subdomains',   label:'subdomains.js' },   // was registered.js
+    { to:'/admin/root-domains', label:'root_domains.js' }, // was domains.js
     { to:'/admin/users',        label:'users.js' },
     { to:'/admin/history',      label:'history.js' },
   ];
 
   return (
     <div style={s.shell}>
+      {/* 1st sticky — admin top bar */}
       <div style={s.topBar}>
         <div style={s.topLeft}>
           <span style={s.adminBadge}>ADMIN</span>
@@ -49,17 +53,27 @@ export default function AdminLayout({ children }) {
         <div style={s.dropdown}>
           {tabs.map(t => (
             <Link key={t.to} to={t.to} onClick={() => setMenuOpen(false)} style={s.dropLink}>
-              <span style={{ color: pathname===t.to ? 'var(--gold)' : 'var(--muted)' }}>{pathname===t.to ? '> ' : '  '}{t.label}</span>
+              <span style={{ color: pathname===t.to ? 'var(--gold)' : 'var(--muted)' }}>
+                {pathname===t.to ? '> ' : '  '}{t.label}
+              </span>
             </Link>
           ))}
           <div style={{ padding:'10px 20px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)' }}>{user?.email}</div>
         </div>
       )}
 
+      {/* Gold accent */}
       <div style={s.accentBar} />
+
+      {/* 2nd sticky — page title + action */}
+      {pageHeader && <div style={s.pageHeader}>{pageHeader}</div>}
+
+      {/* Scrollable content */}
       <div style={s.contentRow}>
         <main style={s.main}>{children}</main>
       </div>
+
+      {/* Status bar */}
       <div style={s.statusBar}>
         <span style={s.si}>SubMarket Admin</span>
         {!isMobile && <span style={s.si}>{user?.email}</span>}
@@ -76,7 +90,7 @@ const s = {
   adminBadge:   { fontFamily:'var(--font-display)', fontSize:'10px', letterSpacing:'2px', background:'var(--gold)', color:'#0A0A0A', padding:'2px 8px' },
   siteName:     { fontFamily:'var(--font-display)', fontSize:'13px', color:'#F8F8F8', letterSpacing:'1px' },
   nav:          { display:'flex', alignItems:'stretch', flex:1, overflow:'hidden' },
-  navLink:      { display:'flex', alignItems:'center', gap:'6px', padding:'0 12px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', borderRight:'1px solid var(--border-dark)', textDecoration:'none', whiteSpace:'nowrap' },
+  navLink:      { display:'flex', alignItems:'center', gap:'6px', padding:'0 11px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', borderRight:'1px solid var(--border-dark)', textDecoration:'none', whiteSpace:'nowrap' },
   navLinkActive:{ color:'var(--gold)', background:'rgba(201,147,42,0.06)' },
   navDot:       { width:'5px', height:'5px', background:'var(--gold)', display:'inline-block', flexShrink:0 },
   topRight:     { display:'flex', alignItems:'center', marginLeft:'auto', borderLeft:'1px solid var(--border-dark)' },
@@ -87,8 +101,9 @@ const s = {
   dropdown:     { position:'fixed', top:'49px', left:0, right:0, zIndex:99, background:'var(--surface-dark)', borderBottom:'2px solid var(--gold)', display:'flex', flexDirection:'column', boxShadow:'0 8px 24px rgba(0,0,0,0.5)' },
   dropLink:     { padding:'14px 20px', fontFamily:'var(--font-mono)', fontSize:'13px', borderBottom:'1px solid var(--border-dark)', textDecoration:'none' },
   accentBar:    { height:'3px', background:'var(--gold)', flexShrink:0 },
+  pageHeader:   { flexShrink:0, background:'var(--surface-dark)', borderBottom:'1px solid var(--border-dark)', padding:'10px clamp(16px,4vw,40px)' },
   contentRow:   { display:'flex', flex:1, minHeight:0, overflow:'hidden' },
-  main:         { flex:1, minWidth:0, overflowY:'auto', padding:'clamp(16px,4vw,32px) clamp(16px,4vw,40px)', maxWidth:'1200px', width:'100%', margin:'0 auto' },
+  main:         { flex:1, minWidth:0, overflowY:'auto', padding:'clamp(16px,4vw,28px) clamp(16px,4vw,40px)', maxWidth:'1200px', width:'100%', margin:'0 auto' },
   statusBar:    { display:'flex', alignItems:'center', height:'22px', background:'var(--gold)', flexShrink:0 },
   si:           { padding:'0 10px', fontSize:'11px', color:'#0A0A0A', fontFamily:'var(--font-display)', borderRight:'1px solid rgba(0,0,0,0.15)', letterSpacing:'0.5px', whiteSpace:'nowrap' },
 };

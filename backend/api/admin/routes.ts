@@ -1,5 +1,6 @@
 // @ts-nocheck
-// Added: archive endpoint + history endpoint for admin tab
+// admin_archived: graceful fallback — if column doesn't exist yet
+// (patch not run), we show all non-pending as the main list.
 
 import { Router } from 'express';
 import supabase from '../../lib/database';
@@ -14,33 +15,52 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
-// GET all non-archived requests (main view)
+// GET main requests — non-archived
+// Graceful: if admin_archived column doesn't exist, return all pending
 router.get('/requests', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    const { data, error } = await supabase
+    // Try with admin_archived filter first
+    let { data, error } = await supabase
       .from('subdomain_requests')
       .select('*')
       .eq('admin_archived', false)
       .order('created_at', { ascending: false });
+
+    // If column doesn't exist yet, fall back to all requests
+    if (error && error.message?.includes('admin_archived')) {
+      const fallback = await supabase
+        .from('subdomain_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      data  = fallback.data;
+      error = fallback.error;
+    }
+
     if (error) throw error;
     res.json({ requests: data });
   } catch (err) { next(err); }
 });
 
-// GET archived requests for history tab
+// GET history — archived requests
 router.get('/requests/history', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('subdomain_requests')
       .select('*')
       .eq('admin_archived', true)
       .order('created_at', { ascending: false });
+
+    if (error && error.message?.includes('admin_archived')) {
+      // Column not created yet — return empty history
+      return res.json({ requests: [] });
+    }
+
     if (error) throw error;
     res.json({ requests: data });
   } catch (err) { next(err); }
 });
 
-// POST archive a request (move to history)
+// POST archive
 router.post('/requests/:id/archive', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     await supabase.from('subdomain_requests').update({ admin_archived: true }).eq('id', req.params.id);
@@ -48,7 +68,7 @@ router.post('/requests/:id/archive', requireAuth, requireAdmin, async (req, res,
   } catch (err) { next(err); }
 });
 
-// DELETE a single request from history permanently
+// DELETE single from history
 router.delete('/requests/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     await supabase.from('subdomain_requests').delete().eq('id', req.params.id);
@@ -56,7 +76,7 @@ router.delete('/requests/:id', requireAuth, requireAdmin, async (req, res, next)
   } catch (err) { next(err); }
 });
 
-// DELETE all archived history
+// DELETE all history
 router.delete('/requests/history/all', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     await supabase.from('subdomain_requests').delete().eq('admin_archived', true);
@@ -64,7 +84,6 @@ router.delete('/requests/history/all', requireAuth, requireAdmin, async (_req, r
   } catch (err) { next(err); }
 });
 
-// GET subdomains
 router.get('/subdomains', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const { data, error } = await supabase.from('tags').select('*, users(email)').order('created_at', { ascending: false });
@@ -73,7 +92,6 @@ router.get('/subdomains', requireAuth, requireAdmin, async (_req, res, next) => 
   } catch (err) { next(err); }
 });
 
-// GET users
 router.get('/users', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const { data: users, error } = await supabase.from('users').select('id, email, is_admin, created_at').order('created_at', { ascending: false });
@@ -152,7 +170,6 @@ router.post('/subdomains/:id/cancel-subscription', requireAuth, requireAdmin, as
   } catch (err) { next(err); }
 });
 
-// Message endpoints
 router.get('/requests/:id/messages', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { data: request } = await supabase.from('subdomain_requests').select('messages').eq('id', req.params.id).single();
@@ -174,7 +191,6 @@ router.post('/requests/:id/message', requireAuth, requireAdmin, async (req, res,
   } catch (err) { next(err); }
 });
 
-// Root domain management
 router.get('/root-domains', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const { data, error } = await supabase.from('root_domains').select('*').order('created_at', { ascending: true });
@@ -211,7 +227,7 @@ router.delete('/root-domains/:id', requireAuth, requireAdmin, async (req, res, n
     const { data: dom } = await supabase.from('root_domains').select('domain').eq('id', req.params.id).single();
     if (!dom) return res.status(404).json({ error: 'Not found' });
     const { count } = await supabase.from('tags').select('*', { count: 'exact', head: true }).eq('domain', dom.domain);
-    if (count && count > 0) return res.status(409).json({ error: `Cannot delete: ${count} subdomain(s) registered on ${dom.domain}` });
+    if (count && count > 0) return res.status(409).json({ error: `Cannot delete: ${count} subdomain(s) on ${dom.domain}` });
     await supabase.from('root_domains').delete().eq('id', req.params.id);
     res.json({ message: `${dom.domain} removed` });
   } catch (err) { next(err); }
