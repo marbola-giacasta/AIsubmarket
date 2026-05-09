@@ -117,7 +117,7 @@ export default function Purchase() {
           <input
             value={subdomain}
             onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''))}
-            placeholder="yourname"
+            placeholder="subdomain you want to buy"
             style={{ flex:1, padding:'10px 4px', background:'transparent', border:'none', fontFamily:'var(--font-display)', color:'var(--text)', fontSize: isMobile ? '18px' : '22px', fontWeight:900, letterSpacing:'-0.5px', outline:'none', minWidth:0 }}
             spellCheck={false}
           />
