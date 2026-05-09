@@ -155,8 +155,8 @@ function RequestCard({ request: r, onProposePrice, onApprove, onReject, resolved
           requestId={r.id}
           initialMessages={messages}
           isAdmin={true}
-          onSend={resolved ? null : sendAdminMessage}
-          pollInterval={resolved ? 0 : 15000}
+          onSend={sendAdminMessage}
+          pollInterval={resolved ? 30000 : 15000}
         />
       </div>
 
