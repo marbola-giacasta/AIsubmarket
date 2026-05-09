@@ -192,4 +192,32 @@ router.delete('/root-domains/:id', requireAuth, requireAdmin, async (req, res, n
   } catch (err) { next(err); }
 });
 
+
+// ── GET messages for a request (admin polling) ────────────────
+router.get('/requests/:id/messages', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { data: request } = await supabase
+      .from('subdomain_requests').select('messages').eq('id', req.params.id).single();
+    if (!request) return res.status(404).json({ error: 'Not found' });
+    res.json({ messages: request.messages || [] });
+  } catch (err) { next(err); }
+});
+
+// ── POST admin sends a message ────────────────────────────────
+router.post('/requests/:id/message', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
+    const { data: request } = await supabase
+      .from('subdomain_requests').select('messages').eq('id', req.params.id).single();
+    if (!request) return res.status(404).json({ error: 'Not found' });
+    const msgs = [
+      ...(Array.isArray(request.messages) ? request.messages : []),
+      { id: Date.now().toString(), sender: 'admin', text: text.trim(), sent_at: new Date().toISOString() },
+    ];
+    await supabase.from('subdomain_requests').update({ messages: msgs }).eq('id', req.params.id);
+    res.json({ messages: msgs });
+  } catch (err) { next(err); }
+});
+
 export default router;
