@@ -1,10 +1,7 @@
 // @ts-nocheck
-// ─────────────────────────────────────────────────────────────
-// MyRequests.tsx — with MessageCarousel integrated.
-// The carousel replaces the old admin_comment alert box.
-// Legacy admin_comment text is shown as the first message
-// if the messages array is empty (backwards compatibility).
-// ─────────────────────────────────────────────────────────────
+// X button now appears on approved AND rejected cards.
+// Pending cards cannot be dismissed — they're still awaiting action.
+// Dismissed requests are filtered server-side and never return.
 
 import React, { useState } from 'react';
 import * as api from '../../services/api';
@@ -26,17 +23,10 @@ function formatPrice(usd, chf, eur) {
   return p.length ? p.join(' / ') + ' / month' : null;
 }
 
-// Convert legacy admin_comment string into a message object
-// so old requests still show their comment in the carousel
-function buildMessages(request) {
-  const msgs = Array.isArray(request.messages) ? [...request.messages] : [];
-  if (msgs.length === 0 && request.admin_comment) {
-    msgs.unshift({
-      id:      'legacy',
-      sender:  'admin',
-      text:    request.admin_comment,
-      sent_at: request.created_at,
-    });
+function buildMessages(r) {
+  const msgs = Array.isArray(r.messages) ? [...r.messages] : [];
+  if (msgs.length === 0 && r.admin_comment) {
+    msgs.unshift({ id:'legacy', sender:'admin', text: r.admin_comment, sent_at: r.created_at });
   }
   return msgs;
 }
@@ -72,8 +62,11 @@ function RequestCard({ request: r, onRefresh }) {
   const priceAccepted = r.price_status === 'accepted';
   const priceDeclined = r.price_status === 'declined';
   const priceStr      = formatPrice(r.price_usd, r.price_chf, r.price_eur);
-  const isRejected    = r.status === 'rejected';
   const messages      = buildMessages(r);
+
+  // X is shown on approved and rejected — NOT on pending
+  // Pending means admin hasn't acted yet, dismissing would confuse things
+  const canDismiss = r.status === 'approved' || r.status === 'rejected';
 
   function badgeLabel() {
     if (priceProposed) return 'PRICE PROPOSED';
@@ -111,11 +104,21 @@ function RequestCard({ request: r, onRefresh }) {
       <div style={s.cardHead}>
         <span style={s.fqdn}>{r.fqdn}</span>
         <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-          <span style={{ ...s.badge, background: badgeBg(), color: (priceProposed||priceDeclined||isRejected) ? '#F8F8F8' : (r.status==='pending' ? '#0A0A0A' : '#F8F8F8') }}>
+          <span style={{ ...s.badge,
+            background: badgeBg(),
+            color: (priceProposed || priceDeclined || r.status === 'rejected') ? '#F8F8F8' : (r.status === 'pending' ? '#0A0A0A' : '#F8F8F8')
+          }}>
             {badgeLabel()}
           </span>
-          {isRejected && (
-            <button onClick={handleDismiss} disabled={dismissBusy} title="Hide this request" style={s.dismissBtn}>
+
+          {/* X button — approved and rejected only */}
+          {canDismiss && (
+            <button
+              onClick={handleDismiss}
+              disabled={dismissBusy}
+              title="Dismiss this card"
+              style={s.dismissBtn}
+            >
               {dismissBusy ? '…' : '×'}
             </button>
           )}
@@ -126,7 +129,7 @@ function RequestCard({ request: r, onRefresh }) {
         <Row k="use_case" v={r.use_case} />
         <Row k="status"   v={STATUS_DESC[r.status] || r.status} muted />
 
-        {/* Message carousel — replaces the old admin_comment alert */}
+        {/* Conversation carousel */}
         <MessageCarousel
           requestId={r.id}
           initialMessages={messages}
@@ -138,19 +141,17 @@ function RequestCard({ request: r, onRefresh }) {
         {/* Price proposal */}
         {priceStr && (
           <div style={{ ...s.priceBox, borderColor: priceProposed ? 'rgba(26,92,255,0.4)' : 'var(--border)', background: priceProposed ? 'rgba(26,92,255,0.04)' : 'var(--bg-2)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
-              <span style={{ fontFamily:'var(--font-display)', fontSize:'9px', color: priceProposed ? 'var(--blue)' : 'var(--muted)', letterSpacing:'1.5px' }}>
-                {priceProposed ? 'MONTHLY PRICE PROPOSAL' : priceAccepted ? 'AGREED PRICE' : 'PRICE PROPOSAL (DECLINED)'}
-              </span>
-            </div>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:'9px', color: priceProposed ? 'var(--blue)' : 'var(--muted)', letterSpacing:'1.5px' }}>
+              {priceProposed ? 'MONTHLY PRICE PROPOSAL' : priceAccepted ? 'AGREED PRICE' : 'PRICE PROPOSAL (DECLINED)'}
+            </span>
             <span style={{ fontFamily:'var(--font-display)', fontSize:'16px', color:'var(--text)', letterSpacing:'0.5px' }}>{priceStr}</span>
             {priceProposed && (
               <>
-                {error && <p style={{ fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--red)', marginTop:'6px' }}>ERR: {error}</p>}
-                <div style={{ display:'flex', gap:'8px', marginTop:'10px' }}>
+                {error && <p style={{ fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--red)' }}>ERR: {error}</p>}
+                <div style={{ display:'flex', gap:'8px', marginTop:'6px' }}>
                   <Btn variant="danger"  onClick={handleDecline} disabled={busy}>DECLINE</Btn>
-                  <Btn variant="primary" onClick={handleAccept}  disabled={busy} marquee>
-                    {busy ? '// ...' : '▶ ACCEPT PROPOSAL'}
+                  <Btn variant="primary" onClick={handleAccept}  disabled={busy}>
+                    {busy ? '// ...' : '▶ ACCEPT'}
                   </Btn>
                 </div>
               </>
@@ -171,7 +172,7 @@ function RequestCard({ request: r, onRefresh }) {
   );
 }
 
-function Row({ k, v, muted=false }) {
+function Row({ k, v, muted = false }) {
   return (
     <div style={s.row}>
       <span style={s.rowKey}>{k}</span>
@@ -191,13 +192,20 @@ const s = {
   cardHead:   { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px' },
   fqdn:       { fontFamily:'var(--font-display)', fontSize:'14px', letterSpacing:'0.3px', wordBreak:'break-all' },
   badge:      { fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 8px', letterSpacing:'1.5px', flexShrink:0 },
-  dismissBtn: { background:'transparent', border:'1px solid var(--red)', color:'var(--red)', fontFamily:'var(--font-mono)', fontSize:'14px', lineHeight:1, width:'22px', height:'22px', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 },
+  // X button style — same as admin archive button for visual consistency
+  dismissBtn: {
+    background:'transparent', border:'1px solid var(--muted)', color:'var(--muted)',
+    fontFamily:'var(--font-mono)', fontSize:'14px', lineHeight:1,
+    width:'22px', height:'22px', display:'flex', alignItems:'center',
+    justifyContent:'center', cursor:'pointer', flexShrink:0,
+    transition:'border-color 0.1s, color 0.1s',
+  },
   cardBody:   { padding:'12px 14px', display:'flex', flexDirection:'column', gap:'10px' },
   row:        { display:'flex', alignItems:'flex-start', fontSize:'12px' },
   rowKey:     { fontFamily:'var(--font-display)', color:'var(--gold)', minWidth:'90px', fontSize:'10px', letterSpacing:'0.3px', flexShrink:0, paddingTop:'1px' },
   rowEq:      { fontFamily:'var(--font-mono)', color:'var(--muted)', padding:'0 8px', flexShrink:0 },
   rowVal:     { fontFamily:'var(--font-mono)', wordBreak:'break-all', fontSize:'12px', lineHeight:1.5 },
-  priceBox:   { padding:'12px', border:'1px solid', display:'flex', flexDirection:'column', gap:'4px' },
+  priceBox:   { padding:'12px', border:'1px solid', display:'flex', flexDirection:'column', gap:'6px' },
   adminNote:  { display:'flex', flexDirection:'column', gap:'4px', padding:'8px 10px', background:'rgba(201,147,42,0.06)', border:'1px solid rgba(201,147,42,0.2)' },
   noteLabel:  { fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--comment)' },
   noteText:   { fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--text)', lineHeight:1.5 },
