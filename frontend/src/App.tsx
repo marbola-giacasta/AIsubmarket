@@ -2,26 +2,39 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import Layout        from './components/Layout/Layout';
-import LoginPage     from './components/Auth/LoginPage';
-import Dashboard, { DashboardHeader } from './components/Dashboard/Dashboard';
-import Purchase      from './components/Purchase/Purchase';
-import AdminLayout   from './components/Layout/AdminLayout';
-import AdminRequests from './components/Admin/AdminRequests';
-import AdminDomains  from './components/Admin/AdminDomains';      // subdomains.js
-import AdminRootDomains from './components/Admin/AdminRootDomains'; // root_domains.js
-import AdminUsers    from './components/Admin/AdminUsers';
-import AdminHistory  from './components/Admin/AdminHistory';
+import Layout           from './components/Layout/Layout';
+import LoginPage        from './components/Auth/LoginPage';
+import Dashboard        from './components/Dashboard/Dashboard';
+import Purchase         from './components/Purchase/Purchase';
+import UserHistory      from './components/Dashboard/UserHistory';
+import AdminLayout      from './components/Layout/AdminLayout';
+import AdminRequests    from './components/Admin/AdminRequests';
+import AdminDomains     from './components/Admin/AdminDomains';
+import AdminRootDomains from './components/Admin/AdminRootDomains';
+import AdminUsers       from './components/Admin/AdminUsers';
+import AdminHistory     from './components/Admin/AdminHistory';
 import Btn from './components/UI/Btn';
 import { useIsMobile } from './hooks/useIsMobile';
 
-// Reusable sticky page header for admin sections
-function AdminPageHeader({ eyebrow, title, action = null }) {
+// Reusable sticky sub-header for admin pages
+function AdminPageHeader({ eyebrow, title }) {
   return (
-    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'10px' }}>
+    <div style={{ display:'flex', alignItems:'flex-end', gap:'12px', flexWrap:'wrap' }}>
       <div>
         <p style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--gold)', marginBottom:'3px', letterSpacing:'0.5px' }}>{eyebrow}</p>
         <h1 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(18px,3vw,28px)', letterSpacing:'2px', color:'#F8F8F8', lineHeight:1 }}>{title}</h1>
+      </div>
+    </div>
+  );
+}
+
+// Reusable sticky sub-header for user pages
+function UserPageHeader({ eyebrow, title, action = null }) {
+  return (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'10px' }}>
+      <div>
+        <p style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--comment)', marginBottom:'3px' }}>{eyebrow}</p>
+        <h1 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(18px,3vw,28px)', letterSpacing:'2px', lineHeight:1 }}>{title}</h1>
       </div>
       {action}
     </div>
@@ -38,6 +51,7 @@ function AppRoutes() {
     </div>
   );
 
+  // ── Admin routing tree ──────────────────────────────────────
   if (user?.is_admin) {
     return (
       <Routes>
@@ -71,53 +85,51 @@ function AppRoutes() {
     );
   }
 
+  // ── Regular user routing tree ───────────────────────────────
   return (
     <Routes>
-      <Route path="/"      element={<Navigate to="/dashboard" replace />} />
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+      <Route path="/login" element={
+        user ? <Navigate to="/dashboard" replace /> : <LoginPage />
+      } />
+
       <Route path="/dashboard" element={
-        user
-          ? <DashboardWrapper isMobile={isMobile} />
-          : <Navigate to="/login" replace />
+        user ? (
+          <Layout pageHeader={
+            <UserPageHeader
+              eyebrow={`// submarket > dashboard > ${user.email?.split('@')[0]}`}
+              title="MY DOMAINS"
+              action={<Link to="/purchase"><Btn variant="blue">+ NEW DOMAIN</Btn></Link>}
+            />
+          }>
+            <Dashboard />
+          </Layout>
+        ) : <Navigate to="/login" replace />
       } />
+
       <Route path="/purchase" element={
-        user
-          ? <PurchaseWrapper isMobile={isMobile} />
-          : <Navigate to="/login" replace />
+        user ? (
+          <Layout pageHeader={
+            <UserPageHeader eyebrow="// submarket > purchase.js" title="BUY A DOMAIN" />
+          }>
+            <Purchase />
+          </Layout>
+        ) : <Navigate to="/login" replace />
       } />
+
+      <Route path="/history" element={
+        user ? (
+          <Layout pageHeader={
+            <UserPageHeader eyebrow="// submarket > history.js" title="MY HISTORY" />
+          }>
+            <UserHistory />
+          </Layout>
+        ) : <Navigate to="/login" replace />
+      } />
+
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
-  );
-}
-
-// Wrapper components so we can pass the pageHeader with live data
-function DashboardWrapper({ isMobile }) {
-  const { user } = useAuth();
-  // We pass a static header here — Dashboard itself exports DashboardHeader
-  // which is rendered via Layout's pageHeader slot
-  const [subdomainCount, setSubdomainCount] = React.useState(0);
-
-  return (
-    <Layout pageHeader={
-      <DashboardHeader subdomainCount={subdomainCount} userEmail={user?.email} isMobile={isMobile} />
-    }>
-      <Dashboard onSubdomainCountChange={setSubdomainCount} />
-    </Layout>
-  );
-}
-
-function PurchaseWrapper({ isMobile }) {
-  return (
-    <Layout pageHeader={
-      <div style={{ display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap' }}>
-        <div>
-          <p style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--comment)', marginBottom:'3px' }}>// submarket &gt; purchase.js</p>
-          <h1 style={{ fontFamily:'var(--font-display)', fontSize: isMobile ? '20px' : '28px', letterSpacing:'2px', lineHeight:1 }}>BUY A DOMAIN</h1>
-        </div>
-      </div>
-    }>
-      <Purchase hideTitle />
-    </Layout>
   );
 }
 
