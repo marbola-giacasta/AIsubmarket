@@ -15,6 +15,7 @@ export default function AdminLayout({ children }) {
     { to:'/admin/registered',   label:'registered.js' },
     { to:'/admin/root-domains', label:'domains.js' },
     { to:'/admin/users',        label:'users.js' },
+    { to:'/admin/history',      label:'history.js' },
   ];
 
   return (
@@ -48,9 +49,7 @@ export default function AdminLayout({ children }) {
         <div style={s.dropdown}>
           {tabs.map(t => (
             <Link key={t.to} to={t.to} onClick={() => setMenuOpen(false)} style={s.dropLink}>
-              <span style={{ color: pathname===t.to ? 'var(--gold)' : 'var(--muted)' }}>
-                {pathname===t.to ? '> ' : '  '}{t.label}
-              </span>
+              <span style={{ color: pathname===t.to ? 'var(--gold)' : 'var(--muted)' }}>{pathname===t.to ? '> ' : '  '}{t.label}</span>
             </Link>
           ))}
           <div style={{ padding:'10px 20px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)' }}>{user?.email}</div>
@@ -77,11 +76,11 @@ const s = {
   adminBadge:   { fontFamily:'var(--font-display)', fontSize:'10px', letterSpacing:'2px', background:'var(--gold)', color:'#0A0A0A', padding:'2px 8px' },
   siteName:     { fontFamily:'var(--font-display)', fontSize:'13px', color:'#F8F8F8', letterSpacing:'1px' },
   nav:          { display:'flex', alignItems:'stretch', flex:1, overflow:'hidden' },
-  navLink:      { display:'flex', alignItems:'center', gap:'6px', padding:'0 14px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', borderRight:'1px solid var(--border-dark)', textDecoration:'none', whiteSpace:'nowrap' },
+  navLink:      { display:'flex', alignItems:'center', gap:'6px', padding:'0 12px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', borderRight:'1px solid var(--border-dark)', textDecoration:'none', whiteSpace:'nowrap' },
   navLinkActive:{ color:'var(--gold)', background:'rgba(201,147,42,0.06)' },
   navDot:       { width:'5px', height:'5px', background:'var(--gold)', display:'inline-block', flexShrink:0 },
   topRight:     { display:'flex', alignItems:'center', marginLeft:'auto', borderLeft:'1px solid var(--border-dark)' },
-  adminEmail:   { padding:'0 12px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', maxWidth:'160px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
+  adminEmail:   { padding:'0 12px', fontFamily:'var(--font-mono)', fontSize:'11px', color:'var(--muted)', maxWidth:'140px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
   logoutBtn:    { height:'100%', padding:'0 14px', background:'transparent', border:'none', borderLeft:'1px solid var(--border-dark)', fontFamily:'var(--font-mono)', color:'var(--muted)', fontSize:'11px', cursor:'pointer' },
   burger:       { height:'100%', padding:'0 14px', display:'flex', flexDirection:'column', justifyContent:'center', gap:'5px', background:'transparent', border:'none', borderLeft:'1px solid var(--border-dark)', cursor:'pointer' },
   bLine:        { display:'block', width:'18px', height:'2px', background:'var(--muted)' },

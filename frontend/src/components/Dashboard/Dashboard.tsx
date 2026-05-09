@@ -1,5 +1,8 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react';
+// Added: auto-poll every 20s so price proposals, approvals etc
+// update without the user switching tabs manually.
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import * as api from '../../services/api';
 import SubdomainCard from './SubdomainCard';
@@ -8,6 +11,8 @@ import MyRequests from './MyRequests';
 import { useAuth } from '../../contexts/AuthContext';
 import Btn from '../UI/Btn';
 import { useIsMobile } from '../../hooks/useIsMobile';
+
+const POLL_MS = 20000; // refresh every 20 seconds silently
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -19,9 +24,10 @@ export default function Dashboard() {
   const [selected,   setSelected]   = useState(null);
   const [error,      setError]      = useState('');
   const [stripeMsg,  setStripeMsg]  = useState('');
+  const pollRef = useRef(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [subRes, reqRes] = await Promise.all([
         api.getSubdomains(),
@@ -29,8 +35,11 @@ export default function Dashboard() {
       ]);
       setSubdomains(subRes.subdomains);
       setMyRequests(reqRes.requests);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (!silent) setError(err.message);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -45,7 +54,12 @@ export default function Dashboard() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    // Start polling — silent refresh so there's no loading flash
+    pollRef.current = setInterval(() => load(true), POLL_MS);
+    return () => clearInterval(pollRef.current);
+  }, [load]);
 
   async function handleDelete(id) {
     if (!confirm('Release this subdomain?')) return;
@@ -73,7 +87,7 @@ export default function Dashboard() {
           </div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize: isMobile ? '26px' : '36px', letterSpacing:'2px' }}>MY DOMAINS</h1>
         </div>
-        <Link to="/purchase"><Btn variant="blue" marquee>+ NEW DOMAIN</Btn></Link>
+        <Link to="/purchase"><Btn variant="blue">+ NEW DOMAIN</Btn></Link>
       </div>
 
       {stripeMsg && <div style={s.ok}>OK -- payment confirmed -- <strong>{stripeMsg}</strong> registered</div>}
@@ -85,23 +99,22 @@ export default function Dashboard() {
             <span style={{ color:'var(--blue)' }}>const </span>
             <span style={{ color:'var(--gold)' }}>myDomains</span>
             <span style={{ color:'var(--muted)' }}> = </span>
-            <span style={{ color:'var(--orange)' }}>[]</span>
-            <br />
+            <span style={{ color:'var(--orange)' }}>[]</span><br />
             <span style={{ color:'var(--comment)', fontSize:'12px' }}>// no subdomains registered yet</span>
           </div>
-          <Link to="/purchase"><Btn variant="primary" marquee>&#9658; PURCHASE FIRST DOMAIN</Btn></Link>
+          <Link to="/purchase"><Btn variant="primary">&#9658; PURCHASE FIRST DOMAIN</Btn></Link>
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'1px', marginBottom:'8px', background:'var(--border)' }}>
           {subdomains.map((tag, i) => (
             <div key={tag.id} className={`fade-up delay-${Math.min(i+1,3)}`}>
-              <SubdomainCard tag={tag} onConfigureDNS={setSelected} onDelete={handleDelete} onRefresh={load} />
+              <SubdomainCard tag={tag} onConfigureDNS={setSelected} onDelete={handleDelete} onRefresh={() => load(true)} />
             </div>
           ))}
         </div>
       )}
 
-      <MyRequests requests={myRequests} onRefresh={load} />
+      <MyRequests requests={myRequests} onRefresh={() => load(true)} />
 
       <div style={{ ...s.docs, marginTop:'32px' }}>
         <div style={{ color:'var(--comment)', padding:'10px 12px 4px', fontSize:'12px', fontFamily:'var(--font-mono)' }}>/**</div>
@@ -122,7 +135,7 @@ export default function Dashboard() {
       </div>
 
       {selected && (
-        <DNSManager tag={selected} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); load(); }} />
+        <DNSManager tag={selected} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); load(true); }} />
       )}
     </div>
   );

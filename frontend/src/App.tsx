@@ -11,6 +11,7 @@ import AdminRequests from './components/Admin/AdminRequests';
 import AdminDomains  from './components/Admin/AdminDomains';
 import AdminRootDomains from './components/Admin/AdminRootDomains';
 import AdminUsers    from './components/Admin/AdminUsers';
+import AdminHistory  from './components/Admin/AdminHistory';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -24,11 +25,12 @@ function AppRoutes() {
   if (user?.is_admin) {
     return (
       <Routes>
-        <Route path="/admin"             element={<AdminLayout><AdminRequests /></AdminLayout>} />
-        <Route path="/admin/registered"  element={<AdminLayout><AdminDomains /></AdminLayout>} />
-        <Route path="/admin/root-domains"element={<AdminLayout><AdminRootDomains /></AdminLayout>} />
-        <Route path="/admin/users"       element={<AdminLayout><AdminUsers /></AdminLayout>} />
-        <Route path="*"                  element={<Navigate to="/admin" replace />} />
+        <Route path="/admin"              element={<AdminLayout><AdminRequests /></AdminLayout>} />
+        <Route path="/admin/registered"   element={<AdminLayout><AdminDomains /></AdminLayout>} />
+        <Route path="/admin/root-domains" element={<AdminLayout><AdminRootDomains /></AdminLayout>} />
+        <Route path="/admin/users"        element={<AdminLayout><AdminUsers /></AdminLayout>} />
+        <Route path="/admin/history"      element={<AdminLayout><AdminHistory /></AdminLayout>} />
+        <Route path="*"                   element={<Navigate to="/admin" replace />} />
       </Routes>
     );
   }
