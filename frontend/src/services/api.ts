@@ -31,3 +31,9 @@ export const confirmStripePayment = (sessionId: string) => request<{ subdomain: 
 export const updateDns            = (id: string, dnsData: DnsPayload) => request<{ subdomain: Tag }>('PUT', `/subdomains/${id}/dns`, dnsData);
 export const deleteDns            = (id: string) => request<{ message: string }>('DELETE', `/subdomains/${id}/dns`);
 export const deleteSubdomain      = (id: string) => request<{ message: string }>('DELETE', `/subdomains/${id}`);
+export const sendMessage          = (requestId: string, text: string, isAdmin: boolean) =>
+  request<{ messages: unknown[] }>(
+    'POST',
+    isAdmin ? `/admin/requests/${requestId}/message` : `/subdomains/requests/${requestId}/message`,
+    { text }
+  );

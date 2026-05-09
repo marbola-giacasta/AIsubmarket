@@ -1,15 +1,15 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────
-// MyRequests.tsx
-// Added: rejected requests show an [x] button in the top-right
-// corner. Clicking it calls dismiss endpoint and hides the card.
-// Dismissed requests are filtered out server-side in the
-// my-requests endpoint so they never come back on refresh.
+// MyRequests.tsx — with MessageCarousel integrated.
+// The carousel replaces the old admin_comment alert box.
+// Legacy admin_comment text is shown as the first message
+// if the messages array is empty (backwards compatibility).
 // ─────────────────────────────────────────────────────────────
 
 import React, { useState } from 'react';
 import * as api from '../../services/api';
 import Btn from '../UI/Btn';
+import MessageCarousel from '../UI/MessageCarousel';
 
 const STATUS_COLOR = { pending:'var(--gold)', approved:'var(--comment)', rejected:'var(--red)' };
 const STATUS_DESC  = {
@@ -24,6 +24,26 @@ function formatPrice(usd, chf, eur) {
   if (chf) p.push(`${chf} CHF`);
   if (eur) p.push(`${eur} EUR`);
   return p.length ? p.join(' / ') + ' / month' : null;
+}
+
+// Convert legacy admin_comment string into a message object
+// so old requests still show their comment in the carousel
+function buildMessages(request) {
+  const msgs = Array.isArray(request.messages) ? [...request.messages] : [];
+  if (msgs.length === 0 && request.admin_comment) {
+    msgs.unshift({
+      id:      'legacy',
+      sender:  'admin',
+      text:    request.admin_comment,
+      sent_at: request.created_at,
+    });
+  }
+  return msgs;
+}
+
+async function sendUserMessage(requestId, text) {
+  const data = await api.sendMessage(requestId, text, false);
+  return data.messages;
 }
 
 export default function MyRequests({ requests, onRefresh }) {
@@ -43,9 +63,9 @@ export default function MyRequests({ requests, onRefresh }) {
 }
 
 function RequestCard({ request: r, onRefresh }) {
-  const [busy,         setBusy]         = useState(false);
-  const [dismissBusy,  setDismissBusy]  = useState(false);
-  const [error,        setError]        = useState('');
+  const [busy,        setBusy]        = useState(false);
+  const [dismissBusy, setDismissBusy] = useState(false);
+  const [error,       setError]       = useState('');
 
   const statusColor   = STATUS_COLOR[r.status] || 'var(--muted)';
   const priceProposed = r.price_status === 'proposed';
@@ -53,6 +73,7 @@ function RequestCard({ request: r, onRefresh }) {
   const priceDeclined = r.price_status === 'declined';
   const priceStr      = formatPrice(r.price_usd, r.price_chf, r.price_eur);
   const isRejected    = r.status === 'rejected';
+  const messages      = buildMessages(r);
 
   function badgeLabel() {
     if (priceProposed) return 'PRICE PROPOSED';
@@ -79,8 +100,6 @@ function RequestCard({ request: r, onRefresh }) {
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
-
-  // Dismiss — only available on rejected requests
   async function handleDismiss() {
     setDismissBusy(true);
     try { await api.dismissRequest(r.id); onRefresh(); }
@@ -95,14 +114,8 @@ function RequestCard({ request: r, onRefresh }) {
           <span style={{ ...s.badge, background: badgeBg(), color: (priceProposed||priceDeclined||isRejected) ? '#F8F8F8' : (r.status==='pending' ? '#0A0A0A' : '#F8F8F8') }}>
             {badgeLabel()}
           </span>
-          {/* X dismiss button — only on rejected cards */}
           {isRejected && (
-            <button
-              onClick={handleDismiss}
-              disabled={dismissBusy}
-              title="Hide this rejected request"
-              style={s.dismissBtn}
-            >
+            <button onClick={handleDismiss} disabled={dismissBusy} title="Hide this request" style={s.dismissBtn}>
               {dismissBusy ? '…' : '×'}
             </button>
           )}
@@ -113,16 +126,14 @@ function RequestCard({ request: r, onRefresh }) {
         <Row k="use_case" v={r.use_case} />
         <Row k="status"   v={STATUS_DESC[r.status] || r.status} muted />
 
-        {/* Admin comment — always shown when it exists */}
-        {r.admin_comment && (
-          <div style={s.commentAlert}>
-            <div style={s.alertHead}>
-              <span style={s.alertDot} />
-              <span style={s.alertTitle}>MESSAGE FROM ADMIN</span>
-            </div>
-            <p style={s.alertText}>{r.admin_comment}</p>
-          </div>
-        )}
+        {/* Message carousel — replaces the old admin_comment alert */}
+        <MessageCarousel
+          requestId={r.id}
+          initialMessages={messages}
+          isAdmin={false}
+          onSend={sendUserMessage}
+          pollInterval={15000}
+        />
 
         {/* Price proposal */}
         {priceStr && (
@@ -147,10 +158,9 @@ function RequestCard({ request: r, onRefresh }) {
           </div>
         )}
 
-        {/* Admin decision note */}
         {r.admin_note && (
           <div style={s.adminNote}>
-            <span style={s.noteLabel}>// admin note:</span>
+            <span style={s.noteLabel}>// decision note:</span>
             <span style={s.noteText}>{r.admin_note}</span>
           </div>
         )}
@@ -177,45 +187,19 @@ const s = {
   headerLabel:{ fontFamily:'var(--font-display)', fontSize:'11px', color:'var(--muted)', letterSpacing:'1px', whiteSpace:'nowrap' },
   headerLine: { flex:1, height:'1px', background:'var(--border)' },
   grid:       { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'12px' },
-
   card:       { background:'var(--surface)', border:'1px solid var(--border)', borderTop:'3px solid var(--gold)', display:'flex', flexDirection:'column' },
   cardHead:   { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px' },
   fqdn:       { fontFamily:'var(--font-display)', fontSize:'14px', letterSpacing:'0.3px', wordBreak:'break-all' },
   badge:      { fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 8px', letterSpacing:'1.5px', flexShrink:0 },
-
-  // Dismiss X — styled like a small close button, red on hover
-  dismissBtn: {
-    background:   'transparent',
-    border:       '1px solid var(--red)',
-    color:        'var(--red)',
-    fontFamily:   'var(--font-mono)',
-    fontSize:     '14px',
-    lineHeight:    1,
-    width:        '22px',
-    height:       '22px',
-    display:      'flex',
-    alignItems:   'center',
-    justifyContent:'center',
-    cursor:       'pointer',
-    flexShrink:    0,
-    transition:   'background 0.15s, color 0.15s',
-  },
-
-  cardBody:   { padding:'12px 14px', display:'flex', flexDirection:'column', gap:'8px' },
+  dismissBtn: { background:'transparent', border:'1px solid var(--red)', color:'var(--red)', fontFamily:'var(--font-mono)', fontSize:'14px', lineHeight:1, width:'22px', height:'22px', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 },
+  cardBody:   { padding:'12px 14px', display:'flex', flexDirection:'column', gap:'10px' },
   row:        { display:'flex', alignItems:'flex-start', fontSize:'12px' },
   rowKey:     { fontFamily:'var(--font-display)', color:'var(--gold)', minWidth:'90px', fontSize:'10px', letterSpacing:'0.3px', flexShrink:0, paddingTop:'1px' },
   rowEq:      { fontFamily:'var(--font-mono)', color:'var(--muted)', padding:'0 8px', flexShrink:0 },
   rowVal:     { fontFamily:'var(--font-mono)', wordBreak:'break-all', fontSize:'12px', lineHeight:1.5 },
-
-  commentAlert:{ padding:'10px 12px', background:'rgba(26,92,255,0.06)', border:'1px solid rgba(26,92,255,0.3)', display:'flex', flexDirection:'column', gap:'6px' },
-  alertHead:  { display:'flex', alignItems:'center', gap:'8px' },
-  alertDot:   { width:'8px', height:'8px', background:'var(--blue)', flexShrink:0, borderRadius:'1px' },
-  alertTitle: { fontFamily:'var(--font-display)', fontSize:'9px', color:'var(--blue)', letterSpacing:'1.5px' },
-  alertText:  { fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--text)', lineHeight:1.5 },
-
   priceBox:   { padding:'12px', border:'1px solid', display:'flex', flexDirection:'column', gap:'4px' },
   adminNote:  { display:'flex', flexDirection:'column', gap:'4px', padding:'8px 10px', background:'rgba(201,147,42,0.06)', border:'1px solid rgba(201,147,42,0.2)' },
   noteLabel:  { fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--comment)' },
   noteText:   { fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--text)', lineHeight:1.5 },
-  date:       { fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--muted)', marginTop:'4px' },
+  date:       { fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--muted)' },
 };
