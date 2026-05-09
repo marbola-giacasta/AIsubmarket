@@ -9,26 +9,22 @@ import Purchase         from './components/Purchase/Purchase';
 import UserHistory      from './components/Dashboard/UserHistory';
 import AdminLayout      from './components/Layout/AdminLayout';
 import AdminRequests    from './components/Admin/AdminRequests';
-import AdminDomains     from './components/Admin/AdminDomains';
-import AdminRootDomains from './components/Admin/AdminRootDomains';
+import AdminDomains     from './components/Admin/AdminDomains';       // subdomains.js — registered user subdomains
+import AdminRootDomains from './components/Admin/AdminRootDomains';   // root_domains.js — open-ai.ch etc.
 import AdminUsers       from './components/Admin/AdminUsers';
 import AdminHistory     from './components/Admin/AdminHistory';
 import Btn from './components/UI/Btn';
 import { useIsMobile } from './hooks/useIsMobile';
 
-// Reusable sticky sub-header for admin pages
 function AdminPageHeader({ eyebrow, title }) {
   return (
-    <div style={{ display:'flex', alignItems:'flex-end', gap:'12px', flexWrap:'wrap' }}>
-      <div>
-        <p style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--gold)', marginBottom:'3px', letterSpacing:'0.5px' }}>{eyebrow}</p>
-        <h1 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(18px,3vw,28px)', letterSpacing:'2px', color:'#F8F8F8', lineHeight:1 }}>{title}</h1>
-      </div>
+    <div>
+      <p style={{ fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--gold)', marginBottom:'3px', letterSpacing:'0.5px' }}>{eyebrow}</p>
+      <h1 style={{ fontFamily:'var(--font-display)', fontSize:'clamp(18px,3vw,28px)', letterSpacing:'2px', color:'#F8F8F8', lineHeight:1 }}>{title}</h1>
     </div>
   );
 }
 
-// Reusable sticky sub-header for user pages
 function UserPageHeader({ eyebrow, title, action = null }) {
   return (
     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'10px' }}>
@@ -51,7 +47,7 @@ function AppRoutes() {
     </div>
   );
 
-  // ── Admin routing tree ──────────────────────────────────────
+  // ── Admin ─────────────────────────────────────────────────
   if (user?.is_admin) {
     return (
       <Routes>
@@ -60,32 +56,39 @@ function AppRoutes() {
             <AdminRequests />
           </AdminLayout>
         } />
+
+        {/* subdomains.js = all registered user subdomains with DNS + subscription health */}
         <Route path="/admin/subdomains" element={
           <AdminLayout pageHeader={<AdminPageHeader eyebrow="// admin > subdomains.js" title="ALL SUBDOMAINS" />}>
             <AdminDomains />
           </AdminLayout>
         } />
+
+        {/* root_domains.js = manage open-ai.ch, geminai.info etc. with Cloudflare zone IDs */}
         <Route path="/admin/root-domains" element={
           <AdminLayout pageHeader={<AdminPageHeader eyebrow="// admin > root_domains.js" title="ROOT DOMAINS" />}>
             <AdminRootDomains />
           </AdminLayout>
         } />
+
         <Route path="/admin/users" element={
           <AdminLayout pageHeader={<AdminPageHeader eyebrow="// admin > users.js" title="USERS" />}>
             <AdminUsers />
           </AdminLayout>
         } />
+
         <Route path="/admin/history" element={
           <AdminLayout pageHeader={<AdminPageHeader eyebrow="// admin > history.js" title="HISTORY" />}>
             <AdminHistory />
           </AdminLayout>
         } />
+
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
     );
   }
 
-  // ── Regular user routing tree ───────────────────────────────
+  // ── Regular user ──────────────────────────────────────────
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
