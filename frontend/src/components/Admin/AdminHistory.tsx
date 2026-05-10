@@ -24,50 +24,38 @@ function fmtP(u, c, e) {
 }
 
 const STATUS_COLOR = { pending: 'var(--gold)', approved: 'var(--comment)', rejected: 'var(--red)' };
-
-const DNS_ICON  = { created: '◉', updated: '◈', deleted: '◌', subscription_cancelled: '∅', 're-registered_by_admin': '↺' };
-const DNS_COLOR = { created: 'var(--comment)', updated: 'var(--blue)', deleted: 'var(--orange)', subscription_cancelled: 'var(--muted)', 're-registered_by_admin': 'var(--gold)' };
-const DNS_LABEL = { created: 'DNS configured', updated: 'DNS updated', deleted: 'DNS record deleted', subscription_cancelled: 'Renewal cancelled', 're-registered_by_admin': 'Re-registered by admin' };
+const DNS_ICON     = { created: '◉', updated: '◈', deleted: '◌', subscription_cancelled: '∅', 're-registered_by_admin': '↺' };
+const DNS_COLOR    = { created: 'var(--comment)', updated: 'var(--blue)', deleted: 'var(--orange)', subscription_cancelled: 'var(--muted)', 're-registered_by_admin': 'var(--gold)' };
+const DNS_LABEL    = { created: 'DNS configured', updated: 'DNS updated', deleted: 'DNS record deleted', subscription_cancelled: 'Renewal cancelled', 're-registered_by_admin': 'Re-registered by admin' };
 
 function buildTimeline(r) {
   const ev = [];
 
-  // 1. Submission
   ev.push({ icon: '→', color: 'var(--muted)', text: 'Request submitted', sub: r.use_case, at: r.created_at });
 
-  // 2. Price
   const price = fmtP(r.price_usd, r.price_chf, r.price_eur);
   if (price) {
     ev.push({
-      icon: '$', color: 'var(--blue)',
-      text: `Price proposed: ${price}`,
+      icon: '$', color: 'var(--blue)', text: `Price proposed: ${price}`,
       sub:  r.price_status === 'accepted' ? '✓ User accepted'
           : r.price_status === 'declined' ? '✗ User declined'
-          : 'Awaiting user response',
+          : 'Awaiting response',
       at: null,
     });
   }
 
-  // 3. Decision
-  if (r.status === 'approved') {
-    ev.push({ icon: '✓', color: 'var(--comment)', text: 'Request approved — subdomain registered', sub: r.admin_note || null, at: null });
-  } else if (r.status === 'rejected') {
-    ev.push({ icon: '✗', color: 'var(--red)', text: 'Request rejected', sub: r.admin_note || null, at: null });
-  }
+  if (r.status === 'approved')  ev.push({ icon: '✓', color: 'var(--comment)', text: 'Request approved — subdomain registered', sub: r.admin_note || null, at: null });
+  if (r.status === 'rejected')  ev.push({ icon: '✗', color: 'var(--red)',     text: 'Request rejected', sub: r.admin_note || null, at: null });
 
-  // 4. Messages
   const msgCount = Array.isArray(r.messages) ? r.messages.length : 0;
-  if (msgCount > 0) {
-    ev.push({ icon: '✉', color: 'var(--blue)', text: `${msgCount} message${msgCount !== 1 ? 's' : ''} exchanged`, sub: null, at: null });
-  }
+  if (msgCount > 0) ev.push({ icon: '✉', color: 'var(--blue)', text: `${msgCount} message${msgCount !== 1 ? 's' : ''} exchanged`, sub: null, at: null });
 
-  // 5. DNS + subscription events — always show something for approved requests
+  // DNS + subscription state — always complete for approved requests
   if (r.status === 'approved') {
     if (r.tag_data) {
       const dnsEvs = Array.isArray(r.tag_data.dns_events) ? r.tag_data.dns_events : [];
 
       if (dnsEvs.length > 0) {
-        // Full audit trail — show each event
         dnsEvs.forEach(de => {
           ev.push({
             icon:  DNS_ICON[de.event]  || '·',
@@ -78,14 +66,12 @@ function buildTimeline(r) {
           });
         });
       } else {
-        // No audit trail yet — synthesise current DNS state
+        // No audit trail yet — synthesise from current tag state
         if (r.tag_data.dns_type && r.tag_data.dns_value) {
           ev.push({ icon: '◉', color: 'var(--comment)', text: 'DNS active', sub: `${r.tag_data.dns_type} → ${r.tag_data.dns_value}`, at: null });
         } else {
-          ev.push({ icon: '✗', color: 'var(--red)', text: 'No DNS configured yet', sub: 'Subdomain is registered but user has not set up DNS', at: null });
+          ev.push({ icon: '✗', color: 'var(--red)', text: 'No DNS configured yet', sub: 'Subdomain is registered but DNS has not been set up', at: null });
         }
-
-        // Always show subscription state
         if (r.tag_data.subscription_cancelled) {
           ev.push({ icon: '∅', color: 'var(--muted)', text: 'Renewal cancelled', sub: null, at: r.tag_data.subscription_cancel_date });
         } else {
@@ -93,8 +79,8 @@ function buildTimeline(r) {
         }
       }
     } else {
-      // Tag doesn't exist — was deleted by old code
-      ev.push({ icon: '∅', color: 'var(--muted)', text: 'Subscription ended — tag was deleted', sub: 'Occurred before renewal-cancel tracking was introduced', at: null });
+      // tag_data is null — tag was deleted by old code before mark-not-delete fix
+      ev.push({ icon: '∅', color: 'var(--muted)', text: 'Subscription ended — tag was deleted', sub: 'Occurred before cancellation tracking was introduced', at: null });
     }
   }
 
@@ -104,6 +90,7 @@ function buildTimeline(r) {
 export default function AdminHistory() {
   const [requests,  setRequests]  = useState([]);
   const [loading,   setLoading]   = useState(true);
+  const [msg,       setMsg]       = useState('');
   const [error,     setError]     = useState('');
   const [clearStep, setClearStep] = useState(0);
 
@@ -119,6 +106,17 @@ export default function AdminHistory() {
     try { await req('DELETE', `/admin/requests/${id}`); load(); }
     catch (e) { setError(e.message); }
   }
+
+  // RE-REGISTER: re-creates the tag for an approved request whose tag was deleted
+  async function handleReregister(id) {
+    setMsg(''); setError('');
+    try {
+      const { message } = await req('POST', `/admin/requests/${id}/reregister`);
+      setMsg(message);
+      load(); // refresh to show the tag now exists
+    } catch (e) { setError(e.message); }
+  }
+
   async function handleClearAll() {
     if (clearStep < 2) { setClearStep(c => c + 1); return; }
     try { await req('DELETE', '/admin/requests/history/all'); setClearStep(0); load(); }
@@ -129,6 +127,7 @@ export default function AdminHistory() {
 
   return (
     <div className="fade-up">
+      {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {error && <div style={s.err}>ERR -- {error}</div>}
 
       {requests.length > 0 && (
@@ -137,12 +136,12 @@ export default function AdminHistory() {
           {clearStep === 1 && <>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red)' }}>// are you sure?</span>
             <Btn variant="ghost"  onClick={() => setClearStep(0)} style={{ fontSize: '11px' }}>CANCEL</Btn>
-            <Btn variant="danger" onClick={handleClearAll}       style={{ fontSize: '11px' }}>YES, DELETE ALL</Btn>
+            <Btn variant="danger" onClick={handleClearAll}        style={{ fontSize: '11px' }}>YES, DELETE ALL</Btn>
           </>}
           {clearStep === 2 && <>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red)' }}>// permanently delete {requests.length} records?</span>
             <Btn variant="ghost"  onClick={() => setClearStep(0)} style={{ fontSize: '11px' }}>CANCEL</Btn>
-            <Btn variant="danger" onClick={handleClearAll}       style={{ fontSize: '11px' }}>CONFIRM</Btn>
+            <Btn variant="danger" onClick={handleClearAll}        style={{ fontSize: '11px' }}>CONFIRM</Btn>
           </>}
         </div>
       )}
@@ -154,6 +153,8 @@ export default function AdminHistory() {
               const sc       = STATUS_COLOR[r.status] || 'var(--muted)';
               const price    = fmtP(r.price_usd, r.price_chf, r.price_eur);
               const timeline = buildTimeline(r);
+              const tagGone  = r.status === 'approved' && !r.tag_data;
+
               return (
                 <div key={r.id} style={s.record}>
                   <div style={s.rHead}>
@@ -162,15 +163,31 @@ export default function AdminHistory() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <span style={s.fqdn}>{r.fqdn}</span>
                         <div style={s.meta}>
-                          <span style={{ fontFamily: 'var(--font-display)', fontSize: '9px', padding: '2px 7px', background: sc, color: r.status === 'pending' ? '#0A0A0A' : '#F8F8F8', letterSpacing: '1px' }}>{r.status.toUpperCase()}</span>
-                          {price && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--blue)' }}>{price}{r.price_status === 'accepted' ? ' ✓' : r.price_status === 'declined' ? ' ✗' : ''}</span>}
+                          <span style={{ fontFamily: 'var(--font-display)', fontSize: '9px', padding: '2px 7px', background: sc, color: r.status === 'pending' ? '#0A0A0A' : '#F8F8F8', letterSpacing: '1px' }}>
+                            {r.status.toUpperCase()}
+                          </span>
+                          {price && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--blue)' }}>
+                              {price}{r.price_status === 'accepted' ? ' ✓' : r.price_status === 'declined' ? ' ✗' : ''}
+                            </span>
+                          )}
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--muted)' }}>{r.requester_email}</span>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--muted)' }}>{new Date(r.created_at).toLocaleDateString('en-GB')}</span>
                         </div>
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(r.id)} style={s.delBtn}>×</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      {/* RE-REGISTER: only for approved requests whose tag was deleted */}
+                      {tagGone && (
+                        <Btn variant="gold" onClick={() => handleReregister(r.id)} style={{ fontSize: '10px', padding: '3px 10px' }}>
+                          ↺ RE-REGISTER
+                        </Btn>
+                      )}
+                      <button onClick={() => handleDelete(r.id)} style={s.delBtn}>×</button>
+                    </div>
                   </div>
+
+                  {/* Chronological timeline */}
                   <div style={s.timeline}>
                     {timeline.map((ev, i) => (
                       <div key={i} style={s.evRow}>
@@ -197,6 +214,7 @@ export default function AdminHistory() {
 
 const s = {
   loading:   { fontFamily: 'var(--font-mono)', color: 'var(--muted)', fontSize: '13px', padding: '20px 0' },
+  ok:        { padding: '8px 14px', background: 'rgba(74,124,63,0.08)', border: '1px solid var(--comment)', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--comment)', marginBottom: '16px' },
   err:       { padding: '8px 14px', background: 'rgba(192,57,43,0.08)', border: '1px solid var(--red)', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--red)', marginBottom: '16px' },
   empty:     { padding: '24px', border: '1px dashed var(--border)', background: 'var(--surface)', fontFamily: 'var(--font-mono)', color: 'var(--comment)', fontSize: '12px' },
   list:      { display: 'flex', flexDirection: 'column', gap: '12px' },

@@ -1,10 +1,10 @@
 // @ts-nocheck
 // ─────────────────────────────────────────────────────────────
-// Btn.tsx — animated button.
-// Marquee removed — it never worked reliably across button sizes.
-// Instead: font-size uses clamp() so text always fits within
-// the button without clipping, even on small mobile buttons.
-// Shimmer and ripple animations are unchanged.
+// Btn.tsx
+// Marquee fix: the scrolling track needs width:max-content so
+// the browser measures the true doubled-text width, not the
+// container width. Only then does translateX(-50%) move exactly
+// one copy's worth to the left and loop seamlessly.
 // ─────────────────────────────────────────────────────────────
 
 import React, { useState, useRef } from 'react';
@@ -38,23 +38,21 @@ export default function Btn({ children, onClick, type='button', disabled=false, 
         overflow:     'hidden',
         display:      'inline-flex',
         alignItems:   'center',
-        justifyContent: 'center',
-        padding:      '9px 16px',
+        padding:      '9px 20px',
+        // marquee buttons fill their container so the text has room to scroll
+        width:        marquee ? '100%' : undefined,
         background:   hovered ? v.bgHover    : v.bg,
         border:       `2px solid ${hovered  ? v.borderHover : v.border}`,
         color:        hovered ? v.colorHover : v.color,
         fontFamily:   'var(--font-display)',
-        // clamp: min 10px, preferred 1.2vw, max 13px
-        // This guarantees text never overflows and never looks tiny
-        fontSize:     'clamp(10px, 1.2vw + 6px, 13px)',
-        letterSpacing:'0.4px',
+        fontSize:     '13px',
+        letterSpacing:'0.5px',
         cursor:       disabled ? 'not-allowed' : 'pointer',
         opacity:      disabled ? 0.45 : 1,
         transform:    pressed  ? 'scale(0.96) translateY(1px)' : 'scale(1)',
         transition:   'background 0.15s, color 0.15s, border-color 0.15s, transform 0.08s',
         userSelect:   'none',
         touchAction:  'manipulation',
-        whiteSpace:   'nowrap',
         ...extra,
       }}
     >
@@ -69,7 +67,29 @@ export default function Btn({ children, onClick, type='button', disabled=false, 
           transform:'translate(-50%,-50%) scale(0)',
           animation:'rippleOut 0.6s ease-out forwards', pointerEvents:'none' }} />
       ))}
-      {children}
+
+      {marquee ? (
+        // Clip window: fills the button, hides overflow on both sides
+        <span style={{ display:'block', overflow:'hidden', flex:1, minWidth:0 }}>
+          {/*
+            Track: width:max-content forces the browser to measure
+            the true natural width of BOTH copies combined.
+            translateX(-50%) then equals exactly one copy's width.
+          */}
+          <span style={{
+            display:   'inline-flex',
+            width:     'max-content',
+            whiteSpace:'nowrap',
+            animation: disabled ? 'none' : 'marqueeScroll 3.5s linear infinite',
+            willChange:'transform',
+          }}>
+            <span style={{ paddingRight:'40px' }}>{children}</span>
+            <span style={{ paddingRight:'40px' }}>{children}</span>
+          </span>
+        </span>
+      ) : (
+        <span style={{ whiteSpace:'nowrap' }}>{children}</span>
+      )}
     </button>
   );
 }
