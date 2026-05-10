@@ -30,6 +30,7 @@ function AppRoutes() {
         <Route path="/admin/subdomains"  element={<AdminLayout><AdminDomains /></AdminLayout>} />
         <Route path="/admin/root-domains"element={<AdminLayout><AdminRootDomains /></AdminLayout>} />
         <Route path="/admin/users"       element={<AdminLayout><AdminUsers /></AdminLayout>} />
+        <Route path="/admin/history"     element={<AdminLayout><AdminHistory /></AdminLayout>} />
         <Route path="*"                  element={<Navigate to="/admin" replace />} />
       </Routes>
     );
