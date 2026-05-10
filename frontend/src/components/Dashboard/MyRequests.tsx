@@ -75,13 +75,23 @@ function RequestCard({ request: r, onRefresh }) {
   // Pending means admin hasn't acted yet, dismissing would confuse things
   const canDismiss = r.status === 'approved' || r.status === 'rejected';
 
+  // Derive actual current subscription state from tag_data
+  const tagGone      = r.status === 'approved' && !r.tag_data;
+  const tagCancelled = r.status === 'approved' && r.tag_data?.subscription_cancelled;
+  const tagNoDns     = r.status === 'approved' && r.tag_data && !r.tag_data.subscription_cancelled
+                       && !r.tag_data.dns_type;
+
   function badgeLabel() {
+    if (tagGone || tagCancelled) return 'RENEWAL CANCELLED';
+    if (tagNoDns && priceAccepted) return 'DNS NOT SET';
     if (priceProposed) return 'PRICE PROPOSED';
     if (priceAccepted) return 'PRICE ACCEPTED';
     if (priceDeclined) return 'PRICE DECLINED';
     return r.status.toUpperCase();
   }
   function badgeBg() {
+    if (tagGone || tagCancelled) return 'var(--red)';
+    if (tagNoDns && priceAccepted) return 'var(--orange)';
     if (priceProposed) return 'var(--blue)';
     if (priceAccepted) return 'var(--comment)';
     if (priceDeclined) return 'var(--muted)';
