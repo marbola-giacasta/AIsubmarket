@@ -69,7 +69,24 @@ router.get('/my-requests', requireAuth, async (req,res,next) => {
       .select('id,fqdn,subdomain,domain,use_case,status,admin_note,admin_comment,price_usd,price_chf,price_eur,price_status,messages,created_at')
       .eq('requester_id',req.user.id).eq('dismissed',false).order('created_at',{ascending:false});
     if (error) throw error;
-    res.json({ requests: data||[] });
+
+    // Enrich approved requests with live tag state so the frontend
+    // can show the actual current status (cancelled vs active)
+    const approvedFqdns = (data||[]).filter(r=>r.status==='approved').map(r=>r.fqdn);
+    const tagMap = new Map();
+    if (approvedFqdns.length > 0) {
+      const { data:tags } = await supabase.from('tags')
+        .select('fqdn,dns_type,dns_value,subscription_cancelled,subscription_cancel_date')
+        .in('fqdn', approvedFqdns);
+      (tags||[]).forEach(t => tagMap.set(t.fqdn, t));
+    }
+    const enriched = (data||[]).map(r => {
+      if (r.status !== 'approved') return r;
+      const tag = tagMap.get(r.fqdn);
+      return { ...r, tag_data: tag || null };
+    });
+
+    res.json({ requests: enriched });
   } catch(err){next(err);}
 });
 

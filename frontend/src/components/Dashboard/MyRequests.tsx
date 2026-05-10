@@ -9,11 +9,18 @@ import Btn from '../UI/Btn';
 import MessageCarousel from '../UI/MessageCarousel';
 
 const STATUS_COLOR = { pending:'var(--gold)', approved:'var(--comment)', rejected:'var(--red)' };
-const STATUS_DESC  = {
-  pending:  'Waiting for admin review. We will get back to you within 24 hours.',
-  approved: 'Approved — your subdomain is active. Configure DNS in My Domains.',
-  rejected: 'This request was not approved.',
-};
+// Dynamic status description that reflects actual tag state
+function getStatusDesc(r) {
+  if (r.status === 'pending')  return 'Waiting for admin review. We will get back to you within 24 hours.';
+  if (r.status === 'rejected') return 'This request was not approved.';
+  if (r.status === 'approved') {
+    if (!r.tag_data) return 'Subscription ended — this subdomain has been released.';
+    if (r.tag_data.subscription_cancelled) return 'Renewal cancelled — subdomain will be released soon.';
+    if (r.tag_data.dns_type && r.tag_data.dns_value) return `Active — DNS configured (${r.tag_data.dns_type} → ${r.tag_data.dns_value}).`;
+    return 'Active — configure DNS in My Domains.';
+  }
+  return r.status;
+}
 
 function formatPrice(usd, chf, eur) {
   const p = [];
@@ -127,7 +134,7 @@ function RequestCard({ request: r, onRefresh }) {
 
       <div style={s.cardBody}>
         <Row k="use_case" v={r.use_case} />
-        <Row k="status"   v={STATUS_DESC[r.status] || r.status} muted />
+        <Row k="status"   v={getStatusDesc(r)} muted />
 
         {/* Conversation carousel */}
         <MessageCarousel
