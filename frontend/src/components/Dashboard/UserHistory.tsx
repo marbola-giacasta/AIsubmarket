@@ -98,6 +98,36 @@ function buildTimeline(r) {
   return ev;
 }
 
+
+// StatusTrail: coloured squares showing request lifecycle left-to-right.
+// Square 1 = decision (gold=pending, green=approved, red=rejected)
+// Square 2 = subscription/DNS state (only for approved):
+//   green=#comment  active + DNS configured
+//   orange          active + DNS not set
+//   red             renewal cancelled
+//   #555555         tag deleted/released
+function StatusTrail({ status, tagExists, tagCancelled, tagHasDns }) {
+  const sq1 = status === 'approved' ? 'var(--comment)'
+             : status === 'rejected' ? 'var(--red)'
+             : 'var(--gold)';
+  const squares = [{ c: sq1, tip: status }];
+  if (status === 'approved') {
+    const sq2 = !tagExists   ? '#555555'
+              : tagCancelled ? 'var(--red)'
+              : tagHasDns    ? 'var(--comment)'
+              :                'var(--orange)';
+    const t2  = !tagExists ? 'Released' : tagCancelled ? 'Cancelled' : tagHasDns ? 'Active+DNS' : 'Active, no DNS';
+    squares.push({ c: sq2, tip: t2 });
+  }
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:'3px', flexShrink:0 }}>
+      {squares.map((sq, i) => (
+        <div key={i} title={sq.tip} style={{ width:'10px', height:'10px', borderRadius:'1px', background:sq.c }} />
+      ))}
+    </div>
+  );
+}
+
 export default function UserHistory() {
   const [requests,  setRequests]  = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -135,7 +165,7 @@ export default function UserHistory() {
       {requests.length === 0 ? (
         <div style={s.empty}>
           <span style={{ color: 'var(--comment)' }}>// no history yet</span><br />
-          <span style={{ color: 'var(--muted)', fontSize: '11px' }}>// all your subdomain requests will appear here</span>
+          <span style={{ color: 'var(--muted)', fontSize: '11px' }}>// dismissed request cards will appear here with their full timeline</span>
         </div>
       ) : (
         <>
@@ -164,7 +194,14 @@ export default function UserHistory() {
                   {/* Header */}
                   <div style={s.rHead}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '1px', background: sc, flexShrink: 0, marginTop: '5px' }} />
+                      <div style={{ flexShrink:0, marginTop:'3px' }}>
+                        <StatusTrail
+                          status={r.status}
+                          tagExists={r.tag_data != null}
+                          tagCancelled={!!r.tag_data?.subscription_cancelled}
+                          tagHasDns={!!(r.tag_data?.dns_type && r.tag_data?.dns_value)}
+                        />
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <span style={s.fqdn}>{r.fqdn}</span>
                         <div style={s.meta}>

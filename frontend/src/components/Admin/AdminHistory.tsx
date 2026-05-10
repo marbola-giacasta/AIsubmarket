@@ -87,11 +87,42 @@ function buildTimeline(r) {
   return ev;
 }
 
+
+// StatusTrail: coloured squares showing request lifecycle left-to-right.
+// Square 1 = decision (gold=pending, green=approved, red=rejected)
+// Square 2 = subscription/DNS state (only for approved):
+//   green=#comment  active + DNS configured
+//   orange          active + DNS not set
+//   red             renewal cancelled
+//   #555555         tag deleted/released
+function StatusTrail({ status, tagExists, tagCancelled, tagHasDns }) {
+  const sq1 = status === 'approved' ? 'var(--comment)'
+             : status === 'rejected' ? 'var(--red)'
+             : 'var(--gold)';
+  const squares = [{ c: sq1, tip: status }];
+  if (status === 'approved') {
+    const sq2 = !tagExists   ? '#555555'
+              : tagCancelled ? 'var(--red)'
+              : tagHasDns    ? 'var(--comment)'
+              :                'var(--orange)';
+    const t2  = !tagExists ? 'Released' : tagCancelled ? 'Cancelled' : tagHasDns ? 'Active+DNS' : 'Active, no DNS';
+    squares.push({ c: sq2, tip: t2 });
+  }
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:'3px', flexShrink:0 }}>
+      {squares.map((sq, i) => (
+        <div key={i} title={sq.tip} style={{ width:'10px', height:'10px', borderRadius:'1px', background:sq.c }} />
+      ))}
+    </div>
+  );
+}
+
 export default function AdminHistory() {
   const [requests,  setRequests]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [msg,       setMsg]       = useState('');
   const [error,     setError]     = useState('');
+  const [msg,       setMsg]       = useState('');
   const [clearStep, setClearStep] = useState(0);
 
   const load = useCallback(async () => {
@@ -101,6 +132,12 @@ export default function AdminHistory() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  async function handleReregister(id) {
+    setMsg(''); setError('');
+    try { const { message } = await req('POST', `/admin/requests/${id}/reregister`); setMsg(message); load(); }
+    catch (e) { setError(e.message); }
+  }
 
   async function handleDelete(id) {
     try { await req('DELETE', `/admin/requests/${id}`); load(); }
@@ -127,6 +164,7 @@ export default function AdminHistory() {
 
   return (
     <div className="fade-up">
+      {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {error && <div style={s.err}>ERR -- {error}</div>}
 
@@ -159,7 +197,14 @@ export default function AdminHistory() {
                 <div key={r.id} style={s.record}>
                   <div style={s.rHead}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '1px', background: sc, flexShrink: 0, marginTop: '5px' }} />
+                      <div style={{ flexShrink:0, marginTop:'3px' }}>
+                        <StatusTrail
+                          status={r.status}
+                          tagExists={r.tag_data != null}
+                          tagCancelled={!!r.tag_data?.subscription_cancelled}
+                          tagHasDns={!!(r.tag_data?.dns_type && r.tag_data?.dns_value)}
+                        />
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <span style={s.fqdn}>{r.fqdn}</span>
                         <div style={s.meta}>
@@ -179,17 +224,6 @@ export default function AdminHistory() {
                     <button onClick={() => handleDelete(r.id)} style={s.delBtn}>×</button>
                   </div>
 
-                  {/* RE-REGISTER: shown below the timeline when the tag was deleted */}
-                  {tagGone && (
-                    <div style={{ padding:'8px 14px 12px', display:'flex', justifyContent:'flex-start' }}>
-                      <button
-                        onClick={() => handleReregister(r.id)}
-                        style={s.reregBtn}
-                      >
-                        ↺ RE-REGISTER SUBDOMAIN
-                      </button>
-                    </div>
-                  )}
                   {/* Chronological timeline */}
                   <div style={s.timeline}>
                     {timeline.map((ev, i) => (
@@ -206,6 +240,14 @@ export default function AdminHistory() {
                       </div>
                     ))}
                   </div>
+                  {/* RE-REGISTER after timeline when tag was deleted */}
+                  {tagGone && (
+                    <div style={{ padding:'10px 14px 14px' }}>
+                      <button onClick={() => handleReregister(r.id)} style={s.reregBtn}>
+                        ↺ RE-REGISTER SUBDOMAIN
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -216,6 +258,8 @@ export default function AdminHistory() {
 }
 
 const s = {
+  ok:       { padding:'8px 14px', background:'rgba(74,124,63,0.08)', border:'1px solid var(--comment)', fontFamily:'var(--font-mono)', fontSize:'12px', color:'var(--comment)', marginBottom:'16px' },
+  reregBtn: { background:'transparent', border:'1px solid var(--gold)', color:'var(--gold)', fontFamily:'var(--font-mono)', fontSize:'11px', padding:'6px 16px', cursor:'pointer', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'6px', letterSpacing:'0.5px' },
   loading:   { fontFamily: 'var(--font-mono)', color: 'var(--muted)', fontSize: '13px', padding: '20px 0' },
   ok:        { padding: '8px 14px', background: 'rgba(74,124,63,0.08)', border: '1px solid var(--comment)', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--comment)', marginBottom: '16px' },
   err:       { padding: '8px 14px', background: 'rgba(192,57,43,0.08)', border: '1px solid var(--red)', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--red)', marginBottom: '16px' },

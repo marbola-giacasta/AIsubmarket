@@ -75,13 +75,22 @@ function RequestCard({ request: r, onRefresh }) {
   // Pending means admin hasn't acted yet, dismissing would confuse things
   const canDismiss = r.status === 'approved' || r.status === 'rejected';
 
+  // Live state from tag_data (null/undefined = tag gone)
+  const tagGone      = r.status === 'approved' && r.tag_data == null;
+  const tagCancelled = r.status === 'approved' && r.tag_data != null && !!r.tag_data.subscription_cancelled;
+  const tagNoDns     = r.status === 'approved' && r.tag_data != null && !r.tag_data.subscription_cancelled && !r.tag_data.dns_type;
+
   function badgeLabel() {
+    if (tagGone || tagCancelled) return 'RENEWAL CANCELLED';
+    if (tagNoDns && priceAccepted) return 'DNS NOT SET';
     if (priceProposed) return 'PRICE PROPOSED';
     if (priceAccepted) return 'PRICE ACCEPTED';
     if (priceDeclined) return 'PRICE DECLINED';
     return r.status.toUpperCase();
   }
   function badgeBg() {
+    if (tagGone || tagCancelled) return 'var(--red)';
+    if (tagNoDns && priceAccepted) return 'var(--orange)';
     if (priceProposed) return 'var(--blue)';
     if (priceAccepted) return 'var(--comment)';
     if (priceDeclined) return 'var(--muted)';
@@ -196,7 +205,7 @@ const s = {
   headerLine: { flex:1, height:'1px', background:'var(--border)' },
   grid:       { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(360px, 1fr))', gap:'12px' },
   card:       { background:'var(--surface)', border:'1px solid var(--border)', borderTop:'3px solid var(--gold)', display:'flex', flexDirection:'column' },
-  cardHead:   { display:'flex', alignItems:'flex-start', justifyContent:'space-between', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px', flexWrap:'wrap' },
+  cardHead:   { display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px' },
   fqdn:       { fontFamily:'var(--font-display)', fontSize:'14px', letterSpacing:'0.3px', wordBreak:'break-word', overflowWrap:'anywhere' },
   badge:      { fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 8px', letterSpacing:'1.5px', flexShrink:0 },
   // X button style — same as admin archive button for visual consistency
@@ -211,7 +220,7 @@ const s = {
   row:        { display:'flex', alignItems:'flex-start', fontSize:'12px' },
   rowKey:     { fontFamily:'var(--font-display)', color:'var(--gold)', minWidth:'90px', fontSize:'10px', letterSpacing:'0.3px', flexShrink:0, paddingTop:'1px' },
   rowEq:      { fontFamily:'var(--font-mono)', color:'var(--muted)', padding:'0 8px', flexShrink:0 },
-  rowVal:     { fontFamily:'var(--font-mono)', wordBreak:'break-all', fontSize:'12px', lineHeight:1.5 },
+  rowVal:     { fontFamily:'var(--font-mono)', wordBreak:'break-word', overflowWrap:'anywhere', fontSize:'12px', lineHeight:1.5 },
   priceBox:   { padding:'12px', border:'1px solid', display:'flex', flexDirection:'column', gap:'6px' },
   adminNote:  { display:'flex', flexDirection:'column', gap:'4px', padding:'8px 10px', background:'rgba(201,147,42,0.06)', border:'1px solid rgba(201,147,42,0.2)' },
   noteLabel:  { fontFamily:'var(--font-mono)', fontSize:'10px', color:'var(--comment)' },

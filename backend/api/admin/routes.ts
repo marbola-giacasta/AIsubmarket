@@ -58,15 +58,15 @@ router.get('/requests', requireAuth, requireAdmin, async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /requests/history — archived requests enriched with tag data ──
+// ── GET /requests/history — ALL resolved requests (complete history) ──
+// Shows approved + rejected regardless of admin_archived flag.
 router.get('/requests/history', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('subdomain_requests').select('*')
-      .eq('admin_archived', true)
+      .in('status', ['approved', 'rejected'])
       .order('created_at', { ascending: false });
 
-    if (error && error.message?.includes('admin_archived')) return res.json({ requests: [] });
     if (error) throw error;
 
     // Enrich approved requests with tag data
@@ -299,5 +299,3 @@ router.delete('/root-domains/:id', requireAuth, requireAdmin, async (req, res, n
 });
 
 export default router;
-/ /   0 5 / 1 0 / 2 0 2 6   1 5 : 5 8 : 1 2  
- 
