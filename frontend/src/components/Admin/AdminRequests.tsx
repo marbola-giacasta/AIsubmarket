@@ -140,7 +140,27 @@ function Card({r,handle,load,resolved=false}){
         <span style={s.fqdn}>{r.fqdn}</span>
         <div style={{display:'flex',gap:'5px',alignItems:'center',flexWrap:'wrap'}}>
           {pl&&<Tag label={pl} color="var(--blue)" bg="rgba(26,92,255,0.12)"/>}
-          <Tag label={r.status.toUpperCase()} color={r.status==='pending'?'#0A0A0A':'#F8F8F8'} bg={sc}/>
+          {/* For resolved approved cards show live status; otherwise show decision */}
+          {resolved && r.status==='approved' ? (
+            !r.tag_exists
+              ? <Tag label="RELEASED"          color="#F8F8F8" bg="#555555"/>
+              : r.tag_cancelled
+              ? <Tag label="RENEWAL CANCELLED" color="#F8F8F8" bg="var(--red)"/>
+              : r.tag_has_dns
+              ? <Tag label="ACTIVE"            color="#F8F8F8" bg="var(--comment)"/>
+              : <Tag label="NO DNS"            color="#0A0A0A" bg="var(--orange)"/>
+          ) : (
+            <Tag label={r.status.toUpperCase()} color={r.status==='pending'?'#0A0A0A':'#F8F8F8'} bg={sc}/>
+          )}
+          {/* StatusTrail: visual sequence of lifecycle squares */}
+          {resolved && r.status==='approved' && (
+            <StatusTrail
+              status={r.status}
+              tagExists={r.tag_exists}
+              tagCancelled={r.tag_cancelled}
+              tagHasDns={r.tag_has_dns}
+            />
+          )}
           {resolved&&<button onClick={()=>handle(()=>req('POST',`/admin/requests/${r.id}/archive`))} style={s.xBtn}>×</button>}
         </div>
       </div>
@@ -219,6 +239,41 @@ function Card({r,handle,load,resolved=false}){
           {tab==='chat'&&<div style={s.tabC}><span style={s.hint}>// use the conversation box above to message the user</span></div>}
         </div>
       )}
+    </div>
+  );
+}
+
+
+// StatusTrail: a row of coloured squares showing lifecycle at a glance.
+// Square 1 = request decision (gold=pending, green=approved, red=rejected)
+// Square 2 = current subscription/DNS state (only for approved requests)
+function StatusTrail({ status, tagExists, tagCancelled, tagHasDns }) {
+  const sq1Color = status === 'approved' ? 'var(--comment)'
+                 : status === 'rejected' ? 'var(--red)'
+                 : 'var(--gold)';
+
+  const squares = [{ color: sq1Color, tip: status }];
+
+  if (status === 'approved') {
+    if (!tagExists) {
+      squares.push({ color: '#555555', tip: 'Released / deleted' });
+    } else if (tagCancelled) {
+      squares.push({ color: 'var(--red)', tip: 'Renewal cancelled' });
+    } else if (tagHasDns) {
+      squares.push({ color: 'var(--comment)', tip: 'Active — DNS configured' });
+    } else {
+      squares.push({ color: 'var(--orange)', tip: 'Active — DNS not set' });
+    }
+  }
+
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:'3px', flexShrink:0 }}>
+      {squares.map((sq, i) => (
+        <div key={i} title={sq.tip} style={{
+          width:'10px', height:'10px', borderRadius:'1px',
+          background: sq.color, flexShrink: 0,
+        }} />
+      ))}
     </div>
   );
 }
