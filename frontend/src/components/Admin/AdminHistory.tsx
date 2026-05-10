@@ -122,6 +122,7 @@ export default function AdminHistory() {
   const [loading,   setLoading]   = useState(true);
   const [msg,       setMsg]       = useState('');
   const [error,     setError]     = useState('');
+  const [msg,       setMsg]       = useState('');
   const [clearStep, setClearStep] = useState(0);
 
   const load = useCallback(async () => {
@@ -143,6 +144,16 @@ export default function AdminHistory() {
     catch (e) { setError(e.message); }
   }
 
+  // RE-REGISTER: re-creates the tag for an approved request whose tag was deleted
+  async function handleReregister(id) {
+    setMsg(''); setError('');
+    try {
+      const { message } = await req('POST', `/admin/requests/${id}/reregister`);
+      setMsg(message);
+      load(); // refresh to show the tag now exists
+    } catch (e) { setError(e.message); }
+  }
+
   async function handleClearAll() {
     if (clearStep < 2) { setClearStep(c => c + 1); return; }
     try { await req('DELETE', '/admin/requests/history/all'); setClearStep(0); load(); }
@@ -153,6 +164,7 @@ export default function AdminHistory() {
 
   return (
     <div className="fade-up">
+      {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {error && <div style={s.err}>ERR -- {error}</div>}
 
@@ -196,9 +208,16 @@ export default function AdminHistory() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <span style={s.fqdn}>{r.fqdn}</span>
                         <div style={s.meta}>
-                          <span style={{ fontFamily: 'var(--font-display)', fontSize: '9px', padding: '2px 7px', background: sc, color: r.status === 'pending' ? '#0A0A0A' : '#F8F8F8', letterSpacing: '1px' }}>
-                            {r.status.toUpperCase()}
-                          </span>
+                          {r.status === 'approved' ? (() => {
+                            const gone   = !r.tag_data;
+                            const canc   = !!r.tag_data?.subscription_cancelled;
+                            const hasDns = !!(r.tag_data?.dns_type && r.tag_data?.dns_value);
+                            const label  = gone ? 'SUBSCRIPTION ENDED' : canc ? 'RENEWAL CANCELLED' : hasDns ? 'ACTIVE' : 'NO DNS';
+                            const bg     = gone ? '#555555' : canc ? 'var(--red)' : hasDns ? 'var(--comment)' : 'var(--orange)';
+                            return <span style={{ fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 7px', background:bg, color:'#F8F8F8', letterSpacing:'1px' }}>{label}</span>;
+                          })() : (
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: '9px', padding: '2px 7px', background: sc, color: r.status === 'pending' ? '#0A0A0A' : '#F8F8F8', letterSpacing: '1px' }}>{r.status.toUpperCase()}</span>
+                          )}
                           {price && (
                             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--blue)' }}>
                               {price}{r.price_status === 'accepted' ? ' ✓' : r.price_status === 'declined' ? ' ✗' : ''}

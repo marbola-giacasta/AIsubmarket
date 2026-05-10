@@ -186,10 +186,12 @@ function Card({r,handle,load,resolved=false}){
           <div style={{...s.panel,borderColor:r.tag_cancelled?'var(--muted)':r.tag_has_dns?'var(--comment)':'var(--red)'}}>
             <span style={s.panelLbl}>// SUBSCRIPTION &amp; DNS HISTORY</span>
             {!r.tag_exists?(
-              <div style={{display:'flex',alignItems:'center',gap:'8px',marginTop:'4px'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:'8px',marginTop:'4px'}}>
                 <span style={{color:'var(--muted)',fontFamily:'var(--font-mono)',fontSize:'12px'}}>∅ Tag deleted before history tracking — subscription gone</span>
-                <Btn variant="gold" onClick={()=>handle(()=>req('POST',`/admin/requests/${r.id}/reregister`))}
-                  style={{fontSize:'10px',padding:'3px 10px'}}>↺ RE-REGISTER</Btn>
+                <div style={{display:'flex'}}>
+                  <Btn variant="gold" onClick={()=>handle(()=>req('POST',`/admin/requests/${r.id}/reregister`))}
+                    style={{fontSize:'11px',padding:'6px 18px',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'5px',letterSpacing:'0.5px'}}>↺ RE-REGISTER</Btn>
+                </div>
               </div>
             ):(
               <DnsTimeline
