@@ -98,33 +98,6 @@ function buildTimeline(r) {
   return ev;
 }
 
-
-// StatusTrail: coloured squares showing request lifecycle left-to-right
-function StatusTrail({ status, tagExists, tagCancelled, tagHasDns }) {
-  const sq1Color = status === 'approved' ? 'var(--comment)'
-                 : status === 'rejected' ? 'var(--red)'
-                 : 'var(--gold)';
-  const squares = [{ color: sq1Color, tip: status }];
-  if (status === 'approved') {
-    if (!tagExists) {
-      squares.push({ color: '#555555', tip: 'Released / deleted' });
-    } else if (tagCancelled) {
-      squares.push({ color: 'var(--red)', tip: 'Renewal cancelled' });
-    } else if (tagHasDns) {
-      squares.push({ color: 'var(--comment)', tip: 'Active — DNS configured' });
-    } else {
-      squares.push({ color: 'var(--orange)', tip: 'Active — DNS not set' });
-    }
-  }
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:'3px', flexShrink:0 }}>
-      {squares.map((sq, i) => (
-        <div key={i} title={sq.tip} style={{ width:'10px', height:'10px', borderRadius:'1px', background: sq.color, flexShrink:0 }} />
-      ))}
-    </div>
-  );
-}
-
 export default function UserHistory() {
   const [requests,  setRequests]  = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -162,7 +135,7 @@ export default function UserHistory() {
       {requests.length === 0 ? (
         <div style={s.empty}>
           <span style={{ color: 'var(--comment)' }}>// no history yet</span><br />
-          <span style={{ color: 'var(--muted)', fontSize: '11px' }}>// dismissed request cards will appear here with their full timeline</span>
+          <span style={{ color: 'var(--muted)', fontSize: '11px' }}>// all your subdomain requests will appear here</span>
         </div>
       ) : (
         <>
@@ -191,14 +164,7 @@ export default function UserHistory() {
                   {/* Header */}
                   <div style={s.rHead}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
-                      <div style={{ flexShrink:0, marginTop:'4px' }}>
-                        <StatusTrail
-                          status={r.status}
-                          tagExists={r.tag_data !== null && r.tag_data !== undefined}
-                          tagCancelled={r.tag_data?.subscription_cancelled}
-                          tagHasDns={!!(r.tag_data?.dns_type && r.tag_data?.dns_value)}
-                        />
-                      </div>
+                      <div style={{ width: '10px', height: '10px', borderRadius: '1px', background: sc, flexShrink: 0, marginTop: '5px' }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <span style={s.fqdn}>{r.fqdn}</span>
                         <div style={s.meta}>

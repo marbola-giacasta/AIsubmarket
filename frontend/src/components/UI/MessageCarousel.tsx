@@ -147,7 +147,7 @@ export default function MessageCarousel({ requestId, initialMessages = [], curre
               disabled={sending}
             />
             <button type="submit" disabled={sending || !text.trim()} style={s.sendBtn}>
-              {sending ? '...' : '&#9658;'}
+              {sending ? '...' : 'SEND'}
             </button>
           </div>
           {sendError && <p style={s.sendError}>ERR: {sendError}</p>}

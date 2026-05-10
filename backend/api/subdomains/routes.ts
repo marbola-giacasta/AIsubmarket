@@ -92,17 +92,21 @@ router.get('/my-requests', requireAuth, async (req,res,next) => {
 
 router.get('/my-history', requireAuth, async (req,res,next) => {
   try {
-    // Join with tags to get current DNS/subscription status for the timeline
+    // Return ALL requests for this user — both dismissed and active.
+    // This makes the history tab a complete record of everything,
+    // not just things the user has explicitly dismissed.
     const { data:requests, error } = await supabase.from('subdomain_requests')
-      .select('id,fqdn,use_case,status,admin_note,price_usd,price_chf,price_eur,price_status,messages,created_at')
-      .eq('requester_id',req.user.id).eq('dismissed',true).order('created_at',{ascending:false});
+      .select('id,fqdn,use_case,status,admin_note,price_usd,price_chf,price_eur,price_status,messages,created_at,dismissed')
+      .eq('requester_id',req.user.id).order('created_at',{ascending:false});
     if (error) throw error;
 
-    // For each approved request, get the live tag data
+    // Enrich approved requests with live tag state for the timeline
     const fqdns = (requests||[]).filter(r=>r.status==='approved').map(r=>r.fqdn);
     const tagMap = new Map();
     if (fqdns.length > 0) {
-      const { data:tags } = await supabase.from('tags').select('fqdn,dns_type,dns_value,dns_events,subscription_cancelled,subscription_cancel_date').in('fqdn', fqdns);
+      const { data:tags } = await supabase.from('tags')
+        .select('fqdn,dns_type,dns_value,dns_events,subscription_cancelled,subscription_cancel_date')
+        .in('fqdn', fqdns);
       (tags||[]).forEach(t=>tagMap.set(t.fqdn,t));
     }
 
