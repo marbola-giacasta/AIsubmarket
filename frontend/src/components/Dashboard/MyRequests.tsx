@@ -75,23 +75,13 @@ function RequestCard({ request: r, onRefresh }) {
   // Pending means admin hasn't acted yet, dismissing would confuse things
   const canDismiss = r.status === 'approved' || r.status === 'rejected';
 
-  // Derive actual current subscription state from tag_data
-  const tagGone      = r.status === 'approved' && !r.tag_data;
-  const tagCancelled = r.status === 'approved' && r.tag_data?.subscription_cancelled;
-  const tagNoDns     = r.status === 'approved' && r.tag_data && !r.tag_data.subscription_cancelled
-                       && !r.tag_data.dns_type;
-
   function badgeLabel() {
-    if (tagGone || tagCancelled) return 'RENEWAL CANCELLED';
-    if (tagNoDns && priceAccepted) return 'DNS NOT SET';
     if (priceProposed) return 'PRICE PROPOSED';
     if (priceAccepted) return 'PRICE ACCEPTED';
     if (priceDeclined) return 'PRICE DECLINED';
     return r.status.toUpperCase();
   }
   function badgeBg() {
-    if (tagGone || tagCancelled) return 'var(--red)';
-    if (tagNoDns && priceAccepted) return 'var(--orange)';
     if (priceProposed) return 'var(--blue)';
     if (priceAccepted) return 'var(--comment)';
     if (priceDeclined) return 'var(--muted)';
@@ -204,10 +194,10 @@ const s = {
   header:     { display:'flex', alignItems:'center', gap:'14px', marginBottom:'14px' },
   headerLabel:{ fontFamily:'var(--font-display)', fontSize:'11px', color:'var(--muted)', letterSpacing:'1px', whiteSpace:'nowrap' },
   headerLine: { flex:1, height:'1px', background:'var(--border)' },
-  grid:       { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'12px' },
+  grid:       { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(360px, 1fr))', gap:'12px' },
   card:       { background:'var(--surface)', border:'1px solid var(--border)', borderTop:'3px solid var(--gold)', display:'flex', flexDirection:'column' },
-  cardHead:   { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px' },
-  fqdn:       { fontFamily:'var(--font-display)', fontSize:'14px', letterSpacing:'0.3px', wordBreak:'break-all' },
+  cardHead:   { display:'flex', alignItems:'flex-start', justifyContent:'space-between', padding:'10px 14px', background:'var(--bg-2)', borderBottom:'1px solid var(--border)', gap:'8px', flexWrap:'wrap' },
+  fqdn:       { fontFamily:'var(--font-display)', fontSize:'14px', letterSpacing:'0.3px', wordBreak:'break-word', overflowWrap:'anywhere' },
   badge:      { fontFamily:'var(--font-display)', fontSize:'9px', padding:'2px 8px', letterSpacing:'1.5px', flexShrink:0 },
   // X button style — same as admin archive button for visual consistency
   dismissBtn: {
