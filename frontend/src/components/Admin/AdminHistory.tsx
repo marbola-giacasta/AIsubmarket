@@ -122,7 +122,6 @@ export default function AdminHistory() {
   const [loading,   setLoading]   = useState(true);
   const [msg,       setMsg]       = useState('');
   const [error,     setError]     = useState('');
-  const [msg,       setMsg]       = useState('');
   const [clearStep, setClearStep] = useState(0);
 
   const load = useCallback(async () => {
@@ -144,16 +143,6 @@ export default function AdminHistory() {
     catch (e) { setError(e.message); }
   }
 
-  // RE-REGISTER: re-creates the tag for an approved request whose tag was deleted
-  async function handleReregister(id) {
-    setMsg(''); setError('');
-    try {
-      const { message } = await req('POST', `/admin/requests/${id}/reregister`);
-      setMsg(message);
-      load(); // refresh to show the tag now exists
-    } catch (e) { setError(e.message); }
-  }
-
   async function handleClearAll() {
     if (clearStep < 2) { setClearStep(c => c + 1); return; }
     try { await req('DELETE', '/admin/requests/history/all'); setClearStep(0); load(); }
@@ -164,7 +153,6 @@ export default function AdminHistory() {
 
   return (
     <div className="fade-up">
-      {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {msg   && <div style={s.ok}>OK -- {msg}</div>}
       {error && <div style={s.err}>ERR -- {error}</div>}
 
