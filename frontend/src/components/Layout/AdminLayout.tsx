@@ -12,9 +12,10 @@ export default function AdminLayout({ children }) {
 
   const tabs = [
     { to:'/admin',              label:'requests.js' },
-    { to:'/admin/registered',   label:'registered.js' },
+    { to:'/admin/subdomains',   label:'subdomains.js' },
     { to:'/admin/root-domains', label:'domains.js' },
     { to:'/admin/users',        label:'users.js' },
+    { to:'/admin/history',      label:'history.js' },
   ];
 
   return (

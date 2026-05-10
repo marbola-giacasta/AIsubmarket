@@ -11,6 +11,8 @@ import AdminRequests from './components/Admin/AdminRequests';
 import AdminDomains  from './components/Admin/AdminDomains';
 import AdminRootDomains from './components/Admin/AdminRootDomains';
 import AdminUsers    from './components/Admin/AdminUsers';
+import AdminHistory  from './components/Admin/AdminHistory';
+import UserHistory   from './components/Dashboard/UserHistory';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -25,7 +27,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/admin"             element={<AdminLayout><AdminRequests /></AdminLayout>} />
-        <Route path="/admin/registered"  element={<AdminLayout><AdminDomains /></AdminLayout>} />
+        <Route path="/admin/subdomains"  element={<AdminLayout><AdminDomains /></AdminLayout>} />
         <Route path="/admin/root-domains"element={<AdminLayout><AdminRootDomains /></AdminLayout>} />
         <Route path="/admin/users"       element={<AdminLayout><AdminUsers /></AdminLayout>} />
         <Route path="*"                  element={<Navigate to="/admin" replace />} />
@@ -39,6 +41,7 @@ function AppRoutes() {
       <Route path="/login"     element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/dashboard" element={user ? <Layout><Dashboard /></Layout> : <Navigate to="/login" replace />} />
       <Route path="/purchase"  element={user ? <Layout><Purchase /></Layout>  : <Navigate to="/login" replace />} />
+      <Route path="/history"   element={user ? <Layout><UserHistory /></Layout> : <Navigate to="/login" replace />} />
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
