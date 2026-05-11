@@ -21,17 +21,23 @@ const PORT = process.env.PORT ?? 3001;
 // I only allow requests from my own frontend domains.
 // The spread + filter removes any undefined values
 // (e.g. if FRONTEND_URL is not set in .env)
-const allowedOrigins: string[] = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  process.env.FRONTEND_URL ?? '',
-].filter(Boolean);
+// Allow all Vercel preview deployments, localhost, and the production frontend.
+// The pattern matches any *.vercel.app subdomain so preview deploys also work.
+const VERCEL_PATTERN = /\.vercel\.app$/;
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin — this happens with curl and mobile apps
+    // No origin = curl / server-to-server / mobile app — always allow
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Always allow localhost for local dev
+    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))
+      return callback(null, true);
+    // Allow all *.vercel.app origins (covers prod + every preview deploy)
+    if (VERCEL_PATTERN.test(origin)) return callback(null, true);
+    // Allow explicit FRONTEND_URL if set (e.g. custom domain)
+    if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL)
+      return callback(null, true);
+    // Block anything else
     callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
