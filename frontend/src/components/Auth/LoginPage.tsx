@@ -62,7 +62,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ display:'flex', height:'100dvh', flexDirection: isMobile ? 'column' : 'row', overflow:'hidden' }}>
+    <div style={{ display:'flex', minHeight:'100dvh', flexDirection: isMobile ? 'column' : 'row' }}>
 
       {/* ── Dark section ─────────────────────────────────── */}
       {isMobile ? (
@@ -116,9 +116,10 @@ export default function LoginPage() {
       {/* ── Form section ─────────────────────────────────── */}
       <div style={{
         ...s.formSide,
-        flex:       isMobile ? 1 : undefined,
+        flex:       isMobile ? '1 0 auto' : undefined,
         width:      isMobile ? '100%' : 'clamp(300px, 40vw, 440px)',
         overflowY:  'auto',
+        WebkitOverflowScrolling: 'touch',
         borderLeft: isMobile ? 'none' : '2px solid var(--green)',
         borderTop:  isMobile ? '2px solid var(--green)' : 'none',
       }}>
