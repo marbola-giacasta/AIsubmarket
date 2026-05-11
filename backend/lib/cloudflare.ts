@@ -35,30 +35,19 @@ async function cfRequest(method, path, body = null) {
 }
 
 // Looks up zone ID: DB first, env var fallback, error if neither
-// A zone_id is valid only if it looks like a real 32-char hex string.
-// This filters out placeholder values like "YOUR_ZONE_ID" that were
-// never replaced, instead of sending them straight to Cloudflare.
-function isRealZoneId(id) {
-  return typeof id === 'string' && /^[a-f0-9]{32}$/i.test(id.trim());
-}
-
 async function getZoneId(domain) {
   // Try DB first (supports dynamically added domains)
   try {
     const supabase = require('./database').default;
     const { data } = await supabase.from('root_domains').select('zone_id').eq('domain', domain).single();
-    if (data?.zone_id && isRealZoneId(data.zone_id)) return data.zone_id.trim();
+    if (data?.zone_id) return data.zone_id;
   } catch (_) { /* fall through to env var */ }
 
   // Env var fallback for original four domains
   const fromEnv = ZONE_MAP_ENV[domain];
-  if (fromEnv && isRealZoneId(fromEnv)) return fromEnv.trim();
+  if (fromEnv) return fromEnv;
 
-  throw new Error(
-    `No valid Cloudflare Zone ID configured for domain "${domain}". ` +
-    `Go to Admin → domains.js and update the Zone ID. ` +
-    `Find it at dash.cloudflare.com → your domain → Overview → Zone ID (right sidebar).`
-  );
+  throw new Error(`No Cloudflare zone configured for domain: ${domain}`);
 }
 
 export async function createDnsRecord({ domain, subdomain, type, value, proxied = false, ttl = 3600 }) {
@@ -69,10 +58,16 @@ export async function createDnsRecord({ domain, subdomain, type, value, proxied 
   return record.id;
 }
 
-export async function updateDnsRecord({ domain, recordId, type, value, proxied = false, ttl = 3600 }) {
+export async function updateDnsRecord({ domain, subdomain, recordId, type, value, proxied = false, ttl = 3600 }) {
   const zoneId = await getZoneId(domain);
+  // Cloudflare PUT requires 'name' — without it the API returns
+  // "could not route to /zones/YOUR_ZONE_ID/dns_records — invalid identifier"
   await cfRequest('PUT', `/zones/${zoneId}/dns_records/${recordId}`, {
-    type, content: value, proxied, ttl: proxied ? 1 : ttl,
+    type,
+    name: subdomain,   // e.g. "mario" (just the subdomain part, not FQDN)
+    content: value,
+    proxied,
+    ttl: proxied ? 1 : ttl,
   });
 }
 

@@ -280,7 +280,7 @@ router.put('/:id/dns', requireAuth, async (req,res,next) => {
 
     let recordId = tag.dns_record_id;
     const isUpdate = !!recordId;
-    if (isUpdate) { await updateDnsRecord({ domain:tag.domain,recordId,type:dns_type,value:dns_value,proxied:dns_proxied,ttl:dns_ttl }); }
+    if (isUpdate) { await updateDnsRecord({ domain:tag.domain,subdomain:tag.subdomain,recordId,type:dns_type,value:dns_value,proxied:dns_proxied,ttl:dns_ttl }); }
     else          { recordId = await createDnsRecord({ domain:tag.domain,subdomain:tag.subdomain,type:dns_type,value:dns_value,proxied:dns_proxied,ttl:dns_ttl }); }
 
     // Append to dns_events log

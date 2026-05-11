@@ -81,7 +81,7 @@ export default function Dashboard() {
           <Link to="/purchase"><Btn variant="primary">&#9658; PURCHASE FIRST DOMAIN</Btn></Link>
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(380px, 1fr))', gap:'1px', marginBottom:'8px', background:'var(--border)' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(380px, 1fr))', gap:'16px', marginBottom:'8px' }}>
           {subdomains.map((tag, i) => (
             <div key={tag.id} className={`fade-up delay-${Math.min(i+1,3)}`}>
               <SubdomainCard tag={tag} onConfigureDNS={setSelected} onDelete={handleDelete} onRefresh={() => load(true)} />
